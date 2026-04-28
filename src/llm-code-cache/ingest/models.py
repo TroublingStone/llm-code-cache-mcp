@@ -1,0 +1,46 @@
+from dataclasses import dataclass
+
+from ingest.enums.node_kind import NodeKind
+
+
+@dataclass
+class Node:
+    path: str
+    qualified_name: str
+    name: str
+    kind: NodeKind
+    start_line: int
+    end_line: int
+    source: str
+    parent_class: str | None = None
+    docstring: str | None = None
+
+
+@dataclass
+class Metadata:
+    repo: str
+    path: str
+    qualified_name: str
+    name: str
+    kind: NodeKind
+    start_line: int
+    end_line: int
+    source: str
+
+    @classmethod
+    def from_node(cls, node: Node, repo: str) -> "Metadata":
+        return cls(
+            repo=repo,
+            path=node.path,
+            qualified_name=node.qualified_name,
+            name=node.name,
+            kind=node.kind,
+            start_line=node.start_line,
+            end_line=node.end_line,
+            source=node.source,
+        )
+
+@dataclass
+class Chunk:
+    embed_text: str
+    metadata: Metadata
