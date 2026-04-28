@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from ingest.enums.node_kind import NodeKind
-
+from ingest.enums.edge_kind import EdgeKind
 
 @dataclass
 class Node:
@@ -15,6 +15,16 @@ class Node:
     parent_class: str | None = None
     docstring: str | None = None
 
+@dataclass
+class Edge:
+    source: str
+    target: str
+    kind: EdgeKind
+    
+@dataclass
+class ParseResult:
+    nodes: list[Node]
+    edges: list[Edge]
 
 @dataclass
 class Metadata:
