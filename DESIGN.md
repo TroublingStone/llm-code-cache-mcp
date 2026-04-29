@@ -35,14 +35,16 @@ For the user-facing overview, see [README.md](./README.md).
 
 **Constraint.** Vector entries must be a subset of graph nodes by canonical identifier (`qualified_name`). Every semantic hit must be loadable in the graph for follow-up structural queries.
 
-**Decision.** A single helper, `qualified_name(...)`, produces the canonical identifier in exactly one place in the codebase. Both stores use it. The chunker derives vector metadata directly from parser nodes via a single constructor (`Metadata.from_node`), preventing drift.
+**Invariant.** Each symbol has exactly one canonical identifier, produced deterministically from its structural facts (repo, module path, enclosing scope, name). The same symbol referenced from any code path — parser, chunker, graph writer, query layer — resolves to the same string.
+
+**Enforcement (v0).** A single canonicalization function is the only path to producing the identifier; both stores derive their keys from it. Vector metadata is constructed from parser nodes via a single constructor, so vector entries cannot exist without a graph counterpart. Stronger structural enforcement (e.g., a dedicated identity type that cannot be constructed by string concatenation) is a v1 candidate if the convention proves fragile.
 
 **Failure modes guarded against.**
-- New embeddable kinds added to the chunker without graph counterparts. Mitigated by deriving chunks only from parser nodes.
-- Reindexing leaving stale vectors pointing at obsolete graph nodes. Mitigated by reindex-time consistency check (planned).
-- Multiple naming schemes drifting apart. Mitigated by centralizing the helper.
+- New embeddable kinds added to the chunker without graph counterparts.
+- Reindexing leaving stale vectors pointing at obsolete graph nodes.
+- Multiple naming schemes drifting apart.
 
-**Tradeoff.** Forces upfront discipline. In exchange, hybrid retrieval is reliable by construction — failures are loud (helper raises) rather than silent (vector hits returning no graph match).
+**Tradeoff.** Forces upfront discipline around identity. In exchange, hybrid retrieval is reliable by construction — failures surface loudly rather than as silent mismatches.
 
 ---
 
@@ -154,10 +156,3 @@ Decisions intentionally postponed until there's evidence to drive them.
 - **Cross-repo schema.** Modeling internal-library consumption requires either repo-prefixed `qualified_name`s or a `Repo` node with `BELONGS_TO` edges. Both work; the choice will be informed by what queries are most common across repos.
 
 ---
-
-## References
-
-- Microsoft GraphRAG paper (introduced graph-augmented RAG patterns generally).
-- Tree-sitter — the parser generator underlying the ingestion stage.
-- Model Context Protocol — the agent-tool standard the server implements.
-- Related code-intelligence MCP servers — see [README.md § Related Work](./README.md#related-work).
