@@ -41,3 +41,4 @@ Vector search alone fails on structural questions ("what calls this function tra
 | "Find similar functions to `process_order` that might refactor together" | Hybrid — vector for similarity, graph to scope by module |
 
 The agent picks per query. Tool descriptions are written so the right choice is unambiguous.
+See [DESIGN.md](./DESIGN.md) for the full architectural reasoning.
