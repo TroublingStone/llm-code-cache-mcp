@@ -51,8 +51,12 @@ For the user-facing overview, see [README.md](./README.md).
 **Question.** How is the indexing pipeline structured?
 
 **Decision.** Four stages, each with one job:
-Walker → Parser → ParseResult ──→ Chunker → Embedder → Vector store
-└→ Graph writer ─────→ Graph store
+```mermaid
+flowchart LR
+    Walker --> Parser --> ParseResult
+    ParseResult --> Chunker --> Embedder --> VectorStore[Vector store]
+    ParseResult --> GraphWriter[Graph writer] --> GraphStore[Graph store]
+```
 
 - **Walker.** Filesystem traversal, file-type filtering, gitignore handling.
 - **Parser.** Tree-sitter AST → structured `Node` and `Edge` lists. One source of truth for code structure.
