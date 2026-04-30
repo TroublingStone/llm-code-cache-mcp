@@ -1,12 +1,16 @@
 from pathlib import Path
-from tree_sitter import Language, Node as TSNode, Parser as TSParser
+
+from ingest.enums.edge_kind import EdgeKind
+from ingest.enums.node_kind import NodeKind
+from ingest.models import Edge, Node, ParseResult
+from tree_sitter import Language
+from tree_sitter import Node as TSNode
+from tree_sitter import Parser as TSParser
 from tree_sitter_python import language as _ts_py_lang
 
-from ingest.models import Node, Edge, ParseResult
-from ingest.enums.node_kind import NodeKind
-from ingest.enums.edge_kind import EdgeKind
-
 _PY_LANGUAGE = Language(_ts_py_lang())
+
+_DEFINITION_TYPES = frozenset({"function_definition", "class_definition"})
 
 
 def _unwrap(node: TSNode) -> tuple[TSNode | None, TSNode]:
@@ -19,11 +23,11 @@ def _unwrap(node: TSNode) -> tuple[TSNode | None, TSNode]:
     """
     if node.type == "decorated_definition":
         inner = next(
-            (c for c in node.named_children if c.type in ("function_definition", "class_definition")),
+            (c for c in node.named_children if c.type in _DEFINITION_TYPES),
             None,
         )
         return inner, node
-    if node.type in ("function_definition", "class_definition"):
+    if node.type in _DEFINITION_TYPES:
         return node, node
     return None, node
 
@@ -46,39 +50,46 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
     for child in tree.root_node.named_children:
         if child.type in ("import_statement", "import_from_statement"):
             edges.extend(extract_imports(child, file_qname, source))
+            continue
 
-        else:
-            defn, outer = _unwrap(child)
-            if defn is None:
-                continue
+        defn, outer = _unwrap(child)
+        if defn is None:
+            continue
 
-            if defn.type == "function_definition":
-                fn, fn_edges = extract_function(defn, path, repo_root, source, parent_class=None)
-                nodes.append(fn)
-                edges.extend(fn_edges)
-                edges.extend(extract_decorators(outer, fn.qualified_name, source)[1])
-                edges.append(Edge(fn.qualified_name, file_qname, EdgeKind.DEFINED_IN))
-                edges.extend(extract_calls(defn, fn.qualified_name, source))
+        if defn.type == "function_definition":
+            fn, fn_edges = extract_function(
+                defn, path, repo_root, source, parent_class=None
+            )
+            nodes.append(fn)
+            edges.extend(fn_edges)
+            edges.extend(extract_decorators(outer, fn.qualified_name, source)[1])
+            edges.append(Edge(fn.qualified_name, file_qname, EdgeKind.DEFINED_IN))
+            edges.extend(extract_calls(defn, fn.qualified_name, source))
 
-            elif defn.type == "class_definition":
-                cls, cls_edges = extract_class(defn, path, repo_root, source)
-                nodes.append(cls)
-                edges.extend(cls_edges)
-                edges.extend(extract_decorators(outer, cls.qualified_name, source)[1])
-                edges.append(Edge(cls.qualified_name, file_qname, EdgeKind.DEFINED_IN))
+        elif defn.type == "class_definition":
+            cls, cls_edges = extract_class(defn, path, repo_root, source)
+            nodes.append(cls)
+            edges.extend(cls_edges)
+            edges.extend(extract_decorators(outer, cls.qualified_name, source)[1])
+            edges.append(Edge(cls.qualified_name, file_qname, EdgeKind.DEFINED_IN))
 
-                body = defn.child_by_field_name("body")
-                if body:
-                    for item in body.named_children:
-                        mdefn, mouter = _unwrap(item)
-                        if mdefn is None or mdefn.type != "function_definition":
-                            continue
-                        m, m_edges = extract_function(mdefn, path, repo_root, source, parent_class=cls.name)
-                        nodes.append(m)
-                        edges.extend(m_edges)
-                        edges.extend(extract_decorators(mouter, m.qualified_name, source)[1])
-                        edges.append(Edge(m.qualified_name, cls.qualified_name, EdgeKind.DEFINED_IN))
-                        edges.extend(extract_calls(mdefn, m.qualified_name, source))
+            body = defn.child_by_field_name("body")
+            if body:
+                for item in body.named_children:
+                    mdefn, mouter = _unwrap(item)
+                    if mdefn is None or mdefn.type != "function_definition":
+                        continue
+                    m, m_edges = extract_function(
+                        mdefn, path, repo_root, source, parent_class=cls.name
+                    )
+                    nodes.append(m)
+                    edges.extend(m_edges)
+                    _, dec_edges = extract_decorators(mouter, m.qualified_name, source)
+                    edges.extend(dec_edges)
+                    edges.append(
+                        Edge(m.qualified_name, cls.qualified_name, EdgeKind.DEFINED_IN)
+                    )
+                    edges.extend(extract_calls(mdefn, m.qualified_name, source))
 
     return ParseResult(nodes, edges)
 
@@ -100,7 +111,10 @@ def parse_repo(file_paths: list[Path], repo_root: Path) -> ParseResult:
 
 
 def extract_file_node(path: Path, repo_root: Path) -> Node:
-    """Build the File node. One per parsed file. Other nodes link to it via DEFINED_IN."""
+    """Build the File node. One per parsed file.
+
+    Other nodes link to it via DEFINED_IN.
+    """
     source_bytes = path.read_bytes()
     line_count = source_bytes.count(b"\n") + 1
     qname = qualified_name(path, repo_root, [])
@@ -116,7 +130,11 @@ def extract_file_node(path: Path, repo_root: Path) -> Node:
 
 
 def extract_function(
-    ts_node: TSNode, file_path: Path, repo_root: Path, source: bytes, parent_class: str | None
+    ts_node: TSNode,
+    file_path: Path,
+    repo_root: Path,
+    source: bytes,
+    parent_class: str | None,
 ) -> tuple[Node, list[Edge]]:
     """Extract a function or method node.
 
@@ -150,9 +168,8 @@ def extract_decorators(
     """Walk decorator nodes attached to a function/class definition.
 
     Returns:
-      - list of raw decorator strings (e.g. ['app.route("/users/<id>")', 'require_auth'])
-        for storage on the decorated node
-      - list of DECORATED_BY edges from decorated_qualified_name to each decorator's name
+      - list of raw decorator strings for storage on the decorated node
+      - list of DECORATED_BY edges from decorated_qualified_name to each decorator
     """
     decorators: list[str] = []
     edges: list[Edge] = []
@@ -162,11 +179,15 @@ def extract_decorators(
             if name_node:
                 text = node_text(name_node, source)
                 decorators.append(text)
-                edges.append(Edge(decorated_qualified_name, text, EdgeKind.DECORATED_BY))
+                edges.append(
+                    Edge(decorated_qualified_name, text, EdgeKind.DECORATED_BY)
+                )
     return decorators, edges
 
 
-def extract_class(ts_node: TSNode, file_path: Path, repo_root: Path, source: bytes) -> tuple[Node, list[Edge]]:
+def extract_class(
+    ts_node: TSNode, file_path: Path, repo_root: Path, source: bytes
+) -> tuple[Node, list[Edge]]:
     """Extract a class node from a class_definition AST node.
 
     Returns the class Node plus any INHERITS_FROM edges to base classes.
@@ -181,7 +202,9 @@ def extract_class(ts_node: TSNode, file_path: Path, repo_root: Path, source: byt
     if args:
         for base in args.named_children:
             if base.type in ("identifier", "attribute"):
-                edges.append(Edge(qname, node_text(base, source), EdgeKind.INHERITS_FROM))
+                edges.append(
+                    Edge(qname, node_text(base, source), EdgeKind.INHERITS_FROM)
+                )
 
     doc = get_docstring(ts_node, source)
     node = Node(
@@ -211,7 +234,13 @@ def extract_calls(
         if node.type == "call":
             func = node.child_by_field_name("function")
             if func:
-                edges.append(Edge(enclosing_qualified_name, node_text(func, source), EdgeKind.CALLS))
+                edges.append(
+                    Edge(
+                        enclosing_qualified_name,
+                        node_text(func, source),
+                        EdgeKind.CALLS,
+                    )
+                )
         for child in node.named_children:
             walk(child)
 
@@ -221,18 +250,30 @@ def extract_calls(
     return edges
 
 
-def extract_imports(ts_node: TSNode, file_qualified_name: str, source: bytes) -> list[Edge]:
+def extract_imports(
+    ts_node: TSNode, file_qualified_name: str, source: bytes
+) -> list[Edge]:
     """Walk top-level import statements and emit IMPORTS edges from the file."""
     edges: list[Edge] = []
 
     if ts_node.type == "import_statement":
         for child in ts_node.named_children:
             if child.type == "dotted_name":
-                edges.append(Edge(file_qualified_name, node_text(child, source), EdgeKind.IMPORTS))
+                edges.append(
+                    Edge(
+                        file_qualified_name, node_text(child, source), EdgeKind.IMPORTS
+                    )
+                )
             elif child.type == "aliased_import":
                 name_node = child.child_by_field_name("name")
                 if name_node:
-                    edges.append(Edge(file_qualified_name, node_text(name_node, source), EdgeKind.IMPORTS))
+                    edges.append(
+                        Edge(
+                            file_qualified_name,
+                            node_text(name_node, source),
+                            EdgeKind.IMPORTS,
+                        )
+                    )
 
     elif ts_node.type == "import_from_statement":
         module = ts_node.child_by_field_name("module_name")
@@ -273,8 +314,9 @@ def node_text(ts_node: TSNode, source: bytes) -> str:
 
 
 def qualified_name(file_path: Path, repo_root: Path, parts: list[str]) -> str:
-    """Compose the canonical symbol identifier used as both vector metadata
-    and graph node ID. Example: 'src.auth.validators.EmailValidator.check'.
+    """Compose the canonical symbol identifier for vector metadata and graph node ID.
+
+    Example: 'src.auth.validators.EmailValidator.check'.
     Path components are joined with dots, dropping the .py extension.
     """
     rel = file_path.relative_to(repo_root)
