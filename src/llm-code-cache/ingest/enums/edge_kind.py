@@ -6,3 +6,4 @@ class EdgeKind(str, Enum):
     IMPORTS = "imports"
     DEFINED_IN = "defined_in"
     INHERITS_FROM = "inherits_from"
+    DECORATED_BY = "decorated_by"
