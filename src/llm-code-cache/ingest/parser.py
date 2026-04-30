@@ -1,7 +1,10 @@
 from pathlib import Path
 
+from ingest.constants import SOURCE_ENCODING, TS_DEFINITION_TYPES
 from ingest.enums.edge_kind import EdgeKind
 from ingest.enums.node_kind import NodeKind
+from ingest.enums.ts_field_name import TSFieldName
+from ingest.enums.ts_node_type import TSNodeType
 from ingest.models import Edge, Node, ParseResult
 from tree_sitter import Language
 from tree_sitter import Node as TSNode
@@ -9,8 +12,6 @@ from tree_sitter import Parser as TSParser
 from tree_sitter_python import language as _ts_py_lang
 
 _PY_LANGUAGE = Language(_ts_py_lang())
-
-_DEFINITION_TYPES = frozenset({"function_definition", "class_definition"})
 
 
 def _unwrap(node: TSNode) -> tuple[TSNode | None, TSNode]:
@@ -21,13 +22,13 @@ def _unwrap(node: TSNode) -> tuple[TSNode | None, TSNode]:
     For a bare function/class definition, both are the same node.
     Returns (None, node) for any other node type.
     """
-    if node.type == "decorated_definition":
+    if node.type == TSNodeType.DECORATED_DEF:
         inner = next(
-            (c for c in node.named_children if c.type in _DEFINITION_TYPES),
+            (c for c in node.named_children if c.type in TS_DEFINITION_TYPES),
             None,
         )
         return inner, node
-    if node.type in _DEFINITION_TYPES:
+    if node.type in TS_DEFINITION_TYPES:
         return node, node
     return None, node
 
@@ -48,7 +49,7 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
     file_qname = file_node.qualified_name
 
     for child in tree.root_node.named_children:
-        if child.type in ("import_statement", "import_from_statement"):
+        if child.type in (TSNodeType.IMPORT, TSNodeType.IMPORT_FROM):
             edges.extend(extract_imports(child, file_qname, source))
             continue
 
@@ -56,7 +57,7 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
         if defn is None:
             continue
 
-        if defn.type == "function_definition":
+        if defn.type == TSNodeType.FUNCTION_DEF:
             fn, fn_edges = extract_function(
                 defn, path, repo_root, source, parent_class=None
             )
@@ -66,18 +67,18 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
             edges.append(Edge(fn.qualified_name, file_qname, EdgeKind.DEFINED_IN))
             edges.extend(extract_calls(defn, fn.qualified_name, source))
 
-        elif defn.type == "class_definition":
+        elif defn.type == TSNodeType.CLASS_DEF:
             cls, cls_edges = extract_class(defn, path, repo_root, source)
             nodes.append(cls)
             edges.extend(cls_edges)
             edges.extend(extract_decorators(outer, cls.qualified_name, source)[1])
             edges.append(Edge(cls.qualified_name, file_qname, EdgeKind.DEFINED_IN))
 
-            body = defn.child_by_field_name("body")
+            body = defn.child_by_field_name(TSFieldName.BODY)
             if body:
                 for item in body.named_children:
                     mdefn, mouter = _unwrap(item)
-                    if mdefn is None or mdefn.type != "function_definition":
+                    if mdefn is None or mdefn.type != TSNodeType.FUNCTION_DEF:
                         continue
                     m, m_edges = extract_function(
                         mdefn, path, repo_root, source, parent_class=cls.name
@@ -142,7 +143,7 @@ def extract_function(
     on the decorated_definition wrapper node. Returns the function Node and an
     empty edge list (reserved for future intra-function edges).
     """
-    name = node_text(ts_node.child_by_field_name("name"), source)
+    name = node_text(ts_node.child_by_field_name(TSFieldName.NAME), source)
     kind = NodeKind.METHOD if parent_class else NodeKind.FUNCTION
     parts = [parent_class, name] if parent_class else [name]
     qname = qualified_name(file_path, repo_root, parts)
@@ -174,7 +175,7 @@ def extract_decorators(
     decorators: list[str] = []
     edges: list[Edge] = []
     for child in ts_node.children:
-        if child.type == "decorator":
+        if child.type == TSNodeType.DECORATOR:
             name_node = child.named_children[0] if child.named_children else None
             if name_node:
                 text = node_text(name_node, source)
@@ -194,14 +195,14 @@ def extract_class(
     Note: inheritance edges may point to unresolved names in v0 (e.g., 'BaseValidator'
     rather than a fully-qualified target). Resolution happens later.
     """
-    name = node_text(ts_node.child_by_field_name("name"), source)
+    name = node_text(ts_node.child_by_field_name(TSFieldName.NAME), source)
     qname = qualified_name(file_path, repo_root, [name])
     edges: list[Edge] = []
 
-    args = ts_node.child_by_field_name("superclasses")
+    args = ts_node.child_by_field_name(TSFieldName.SUPERCLASSES)
     if args:
         for base in args.named_children:
-            if base.type in ("identifier", "attribute"):
+            if base.type in (TSNodeType.IDENTIFIER, TSNodeType.ATTRIBUTE):
                 edges.append(
                     Edge(qname, node_text(base, source), EdgeKind.INHERITS_FROM)
                 )
@@ -231,8 +232,8 @@ def extract_calls(
     edges: list[Edge] = []
 
     def walk(node: TSNode) -> None:
-        if node.type == "call":
-            func = node.child_by_field_name("function")
+        if node.type == TSNodeType.CALL:
+            func = node.child_by_field_name(TSFieldName.FUNCTION)
             if func:
                 edges.append(
                     Edge(
@@ -244,7 +245,7 @@ def extract_calls(
         for child in node.named_children:
             walk(child)
 
-    body = ts_node.child_by_field_name("body")
+    body = ts_node.child_by_field_name(TSFieldName.BODY)
     if body:
         walk(body)
     return edges
@@ -256,16 +257,16 @@ def extract_imports(
     """Walk top-level import statements and emit IMPORTS edges from the file."""
     edges: list[Edge] = []
 
-    if ts_node.type == "import_statement":
+    if ts_node.type == TSNodeType.IMPORT:
         for child in ts_node.named_children:
-            if child.type == "dotted_name":
+            if child.type == TSNodeType.DOTTED_NAME:
                 edges.append(
                     Edge(
                         file_qualified_name, node_text(child, source), EdgeKind.IMPORTS
                     )
                 )
-            elif child.type == "aliased_import":
-                name_node = child.child_by_field_name("name")
+            elif child.type == TSNodeType.ALIASED_IMPORT:
+                name_node = child.child_by_field_name(TSFieldName.NAME)
                 if name_node:
                     edges.append(
                         Edge(
@@ -275,18 +276,18 @@ def extract_imports(
                         )
                     )
 
-    elif ts_node.type == "import_from_statement":
-        module = ts_node.child_by_field_name("module_name")
+    elif ts_node.type == TSNodeType.IMPORT_FROM:
+        module = ts_node.child_by_field_name(TSFieldName.MODULE_NAME)
         module_name = node_text(module, source) if module else ""
         for child in ts_node.named_children:
             if child == module:
                 continue
-            if child.type == "dotted_name":
+            if child.type == TSNodeType.DOTTED_NAME:
                 imported = node_text(child, source)
                 target = f"{module_name}.{imported}" if module_name else imported
                 edges.append(Edge(file_qualified_name, target, EdgeKind.IMPORTS))
-            elif child.type == "aliased_import":
-                name_node = child.child_by_field_name("name")
+            elif child.type == TSNodeType.ALIASED_IMPORT:
+                name_node = child.child_by_field_name(TSFieldName.NAME)
                 if name_node:
                     imported = node_text(name_node, source)
                     target = f"{module_name}.{imported}" if module_name else imported
@@ -297,20 +298,20 @@ def extract_imports(
 
 def get_docstring(ts_node: TSNode, source: bytes) -> str | None:
     """Return the first-statement string literal of a function/class body, if any."""
-    body = ts_node.child_by_field_name("body")
+    body = ts_node.child_by_field_name(TSFieldName.BODY)
     if not body or not body.named_children:
         return None
     first = body.named_children[0]
-    if first.type == "expression_statement":
+    if first.type == TSNodeType.EXPRESSION_STMT:
         expr = first.named_children[0] if first.named_children else None
-        if expr and expr.type == "string":
+        if expr and expr.type == TSNodeType.STRING:
             return node_text(expr, source)
     return None
 
 
 def node_text(ts_node: TSNode, source: bytes) -> str:
     """Slice the original source bytes for an AST node and decode to str."""
-    return source[ts_node.start_byte:ts_node.end_byte].decode("utf-8")
+    return source[ts_node.start_byte:ts_node.end_byte].decode(SOURCE_ENCODING)
 
 
 def qualified_name(file_path: Path, repo_root: Path, parts: list[str]) -> str:
