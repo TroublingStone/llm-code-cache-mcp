@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class NodeKind(str, Enum):
+class NodeKind(StrEnum):
     FILE = "file"
     FUNCTION = "function"
     METHOD = "method"

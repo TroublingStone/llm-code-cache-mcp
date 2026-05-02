@@ -43,7 +43,7 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
     source = path.read_bytes()
     tree = ts_parser.parse(source)
 
-    file_node = extract_file_node(path, repo_root)
+    file_node = extract_file_node(path, repo_root, source)
     nodes: list[Node] = [file_node]
     edges: list[Edge] = []
     file_qname = file_node.qualified_name
@@ -111,13 +111,12 @@ def parse_repo(file_paths: list[Path], repo_root: Path) -> ParseResult:
     return ParseResult(all_nodes, all_edges)
 
 
-def extract_file_node(path: Path, repo_root: Path) -> Node:
+def extract_file_node(path: Path, repo_root: Path, source: bytes) -> Node:
     """Build the File node. One per parsed file.
 
     Other nodes link to it via DEFINED_IN.
     """
-    source_bytes = path.read_bytes()
-    line_count = source_bytes.count(b"\n") + 1
+    line_count = source.count(b"\n") + 1
     qname = qualified_name(path, repo_root, [])
     return Node(
         path=str(path),

@@ -35,7 +35,10 @@ class Metadata:
     kind: NodeKind
     start_line: int
     end_line: int
-    source: str
+    # source is intentionally excluded: it duplicates embed_text and bloats vector DB metadata.
+    # If source is needed at retrieval time, implement it as a lazy property: read
+    # path[start_line:end_line] from disk on demand. A read failure means the file changed
+    # and the chunk is stale — trigger reindex.
 
     @classmethod
     def from_node(cls, node: Node, repo: str) -> "Metadata":
@@ -47,7 +50,6 @@ class Metadata:
             kind=node.kind,
             start_line=node.start_line,
             end_line=node.end_line,
-            source=node.source,
         )
 
 @dataclass

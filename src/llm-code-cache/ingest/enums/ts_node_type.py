@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class TSNodeType(str, Enum):
+class TSNodeType(StrEnum):
     FUNCTION_DEF    = "function_definition"
     CLASS_DEF       = "class_definition"
     DECORATED_DEF   = "decorated_definition"

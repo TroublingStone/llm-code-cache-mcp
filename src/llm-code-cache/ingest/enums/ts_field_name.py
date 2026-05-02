@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class TSFieldName(str, Enum):
+class TSFieldName(StrEnum):
     NAME         = "name"
     BODY         = "body"
     FUNCTION     = "function"

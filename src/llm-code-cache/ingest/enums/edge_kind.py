@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class EdgeKind(str, Enum):
+class EdgeKind(StrEnum):
     CALLS = "calls"
     IMPORTS = "imports"
     DEFINED_IN = "defined_in"
