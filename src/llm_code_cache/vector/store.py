@@ -1,4 +1,5 @@
 import logging
+from dataclasses import asdict
 
 from llama_index.core import VectorStoreIndex
 from llama_index.core.embeddings import BaseEmbedding
@@ -6,7 +7,7 @@ from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import TextNode
 from llama_index.vector_stores.postgres import PGVectorStore
 
-from llm_code_cache.ingest.models import Chunk
+from llm_code_cache.ingest.models import Chunk, Metadata
 from llm_code_cache.vector.models import VectorHit
 
 logger = logging.getLogger(__name__)
@@ -76,13 +77,5 @@ class VectorStore:
             id_=chunk.metadata.qualified_name,
         )
 
-    def _serialize_metadata(self, metadata) -> dict:
-        return {
-            "qualified_name": metadata.qualified_name,
-            "repo": metadata.repo,
-            "path": metadata.path,
-            "name": metadata.name,
-            "kind": str(metadata.kind),
-            "start_line": metadata.start_line,
-            "end_line": metadata.end_line,
-        }
+    def _serialize_metadata(self, metadata: Metadata) -> dict:
+        return asdict(metadata)
