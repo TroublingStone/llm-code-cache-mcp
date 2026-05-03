@@ -15,5 +15,5 @@ dependencies = [
 dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src/llm-code-cache"]
+pythonpath = ["src/llm_code_cache"]
 testpaths = ["tests"]
