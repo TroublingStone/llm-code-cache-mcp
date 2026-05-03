@@ -1,7 +1,7 @@
 from typing import Iterable
-from ingest.constants import MAX_EMBED_TOKENS, TOKEN_ESTIMATE_DIVISOR
-from ingest.enums.node_kind import NodeKind
-from ingest.models import Chunk, Metadata, Node
+from llm_code_cache.ingest.constants import MAX_EMBED_TOKENS, TOKEN_ESTIMATE_DIVISOR
+from llm_code_cache.ingest.enums.node_kind import NodeKind
+from llm_code_cache.ingest.models import Chunk, Metadata, Node
 
 EMBEDDABLE_KINDS = {NodeKind.FUNCTION, NodeKind.METHOD, NodeKind.CLASS}
 

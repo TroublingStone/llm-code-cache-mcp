@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from ingest.constants import SOURCE_ENCODING, TS_DEFINITION_TYPES
-from ingest.enums.edge_kind import EdgeKind
-from ingest.enums.node_kind import NodeKind
-from ingest.enums.ts_field_name import TSFieldName
-from ingest.enums.ts_node_type import TSNodeType
-from ingest.models import Edge, Node, ParseResult
+from llm_code_cache.ingest.constants import SOURCE_ENCODING, TS_DEFINITION_TYPES
+from llm_code_cache.ingest.enums.edge_kind import EdgeKind
+from llm_code_cache.ingest.enums.node_kind import NodeKind
+from llm_code_cache.ingest.enums.ts_field_name import TSFieldName
+from llm_code_cache.ingest.enums.ts_node_type import TSNodeType
+from llm_code_cache.ingest.models import Edge, Node, ParseResult
 from tree_sitter import Language
 from tree_sitter import Node as TSNode
 from tree_sitter import Parser as TSParser

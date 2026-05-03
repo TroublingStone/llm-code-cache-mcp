@@ -1,4 +1,4 @@
-from ingest.enums.ts_node_type import TSNodeType
+from llm_code_cache.ingest.enums.ts_node_type import TSNodeType
 
 TS_DEFINITION_TYPES = frozenset({TSNodeType.FUNCTION_DEF, TSNodeType.CLASS_DEF})
 
