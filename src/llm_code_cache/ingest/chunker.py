@@ -25,9 +25,9 @@ def chunk_nodes(nodes: Iterable[Node], repo: str) -> Iterable[Chunk]:
     chunks = []
     for node in nodes:
         if node.kind in EMBEDDABLE_KINDS:
-            embed_node_text: str = build_embed_text(node)
+            embed_node_text = build_embed_text(node)
             if estimate_tokens(embed_node_text) > MAX_EMBED_TOKENS:
                 continue  # TODO: add handling for oversized objects
-            node_chunk: Chunk = Chunk(embed_node_text, Metadata.from_node(node, repo))
+            node_chunk = Chunk(embed_node_text, Metadata.from_node(node, repo))
             chunks.append(node_chunk)
     return chunks

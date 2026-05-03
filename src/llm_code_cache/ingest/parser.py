@@ -33,12 +33,29 @@ def _unwrap(node: TSNode) -> tuple[TSNode | None, TSNode]:
     return None, node
 
 
+def _process_function(
+    defn: TSNode,
+    outer: TSNode,
+    path: Path,
+    repo_root: Path,
+    source: bytes,
+    parent_qname: str,
+    parent_class: str | None,
+) -> tuple[Node, list[Edge]]:
+    fn = extract_function(defn, path, repo_root, source, parent_class)
+    fn.decorators, dec_edges = extract_decorators(outer, fn.qualified_name, source)
+    return fn, [
+        *dec_edges,
+        Edge(fn.qualified_name, parent_qname, EdgeKind.DEFINED_IN),
+        *extract_calls(defn, fn.qualified_name, source),
+    ]
+
+
 def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
     """Parse a single file and return its nodes + edges.
 
     ParseResult has two fields: nodes (list[Node]) and edges (list[Edge]).
     Both lists may be empty if the file is empty or has only whitespace.
-    Raises on syntax errors in v0; later we'll log and skip.
     """
     source = path.read_bytes()
     tree = ts_parser.parse(source)
@@ -58,12 +75,9 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
             continue
 
         if defn.type == TSNodeType.FUNCTION_DEF:
-            fn = extract_function(defn, path, repo_root, source, parent_class=None)
+            fn, fn_edges = _process_function(defn, outer, path, repo_root, source, file_qname, None)
             nodes.append(fn)
-            fn.decorators, dec_edges = extract_decorators(outer, fn.qualified_name, source)
-            edges.extend(dec_edges)
-            edges.append(Edge(fn.qualified_name, file_qname, EdgeKind.DEFINED_IN))
-            edges.extend(extract_calls(defn, fn.qualified_name, source))
+            edges.extend(fn_edges)
 
         elif defn.type == TSNodeType.CLASS_DEF:
             cls, cls_edges = extract_class(defn, path, repo_root, source)
@@ -79,14 +93,9 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
                     mdefn, mouter = _unwrap(item)
                     if mdefn is None or mdefn.type != TSNodeType.FUNCTION_DEF:
                         continue
-                    m = extract_function(mdefn, path, repo_root, source, parent_class=cls.name)
+                    m, m_edges = _process_function(mdefn, mouter, path, repo_root, source, cls.qualified_name, cls.name)
                     nodes.append(m)
-                    m.decorators, dec_edges = extract_decorators(mouter, m.qualified_name, source)
-                    edges.extend(dec_edges)
-                    edges.append(
-                        Edge(m.qualified_name, cls.qualified_name, EdgeKind.DEFINED_IN)
-                    )
-                    edges.extend(extract_calls(mdefn, m.qualified_name, source))
+                    edges.extend(m_edges)
 
     return ParseResult(nodes, edges)
 
