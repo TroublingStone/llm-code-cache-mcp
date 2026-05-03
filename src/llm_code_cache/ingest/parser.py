@@ -282,7 +282,11 @@ def get_docstring(ts_node: TSNode, source: bytes) -> str | None:
     if not body or not body.named_children:
         return None
     first = body.named_children[0]
-    if first.type == TSNodeType.EXPRESSION_STMT and first.named_children and first.named_children[0].type == TSNodeType.STRING:
+    if (
+        first.type == TSNodeType.EXPRESSION_STMT
+        and first.named_children
+        and first.named_children[0].type == TSNodeType.STRING
+    ):
         return node_text(first.named_children[0], source)
     return None
 

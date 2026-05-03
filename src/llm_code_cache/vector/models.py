@@ -18,7 +18,7 @@ class VectorHit:
     source: str
 
     @classmethod
-    def from_node(cls, node_with_score: NodeWithScore) -> "VectorHit":
+    def from_node(cls, node_with_score: NodeWithScore) -> VectorHit:
         md = node_with_score.metadata
         return cls(
             qualified_name=md["qualified_name"],

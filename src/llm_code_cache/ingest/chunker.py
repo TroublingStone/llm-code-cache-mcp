@@ -1,4 +1,4 @@
-from typing import Iterable
+from collections.abc import Iterable
 
 from llm_code_cache.ingest.constants import (
     EMBEDDABLE_KINDS,
@@ -26,6 +26,10 @@ def estimate_tokens(text: str) -> int:
 def chunk_nodes(nodes: Iterable[Node], repo: str) -> Iterable[Chunk]:
     chunks = []
     for node in nodes:
-        if node.kind in EMBEDDABLE_KINDS and estimate_tokens(text := build_embed_text(node)) <= MAX_EMBED_TOKENS:  # TODO(v1): log + handle oversized nodes
+        # TODO(v1): log + handle oversized nodes
+        if (
+            node.kind in EMBEDDABLE_KINDS
+            and estimate_tokens(text := build_embed_text(node)) <= MAX_EMBED_TOKENS
+        ):
             chunks.append(Chunk(text, Metadata.from_node(node, repo)))
     return chunks
