@@ -1,15 +1,16 @@
 from pathlib import Path
 
+from tree_sitter import Language
+from tree_sitter import Node as TSNode
+from tree_sitter import Parser as TSParser
+from tree_sitter_python import language as _ts_py_lang
+
 from llm_code_cache.ingest.constants import SOURCE_ENCODING, TS_DEFINITION_TYPES
 from llm_code_cache.ingest.enums.edge_kind import EdgeKind
 from llm_code_cache.ingest.enums.node_kind import NodeKind
 from llm_code_cache.ingest.enums.ts_field_name import TSFieldName
 from llm_code_cache.ingest.enums.ts_node_type import TSNodeType
 from llm_code_cache.ingest.models import Edge, Node, ParseResult
-from tree_sitter import Language
-from tree_sitter import Node as TSNode
-from tree_sitter import Parser as TSParser
-from tree_sitter_python import language as _ts_py_lang
 
 _PY_LANGUAGE = Language(_ts_py_lang())
 

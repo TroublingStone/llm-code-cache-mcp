@@ -1,5 +1,10 @@
 from typing import Iterable
-from llm_code_cache.ingest.constants import MAX_EMBED_TOKENS, TOKEN_ESTIMATE_DIVISOR, EMBEDDABLE_KINDS
+
+from llm_code_cache.ingest.constants import (
+    EMBEDDABLE_KINDS,
+    MAX_EMBED_TOKENS,
+    TOKEN_ESTIMATE_DIVISOR,
+)
 from llm_code_cache.ingest.models import Chunk, Metadata, Node
 
 
