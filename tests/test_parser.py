@@ -129,6 +129,7 @@ def test_decorated_function(repo, ts_parser):
     fn = nodes_by_kind(result, NodeKind.FUNCTION)[0]
     dec_edges = edges_by_kind(result, EdgeKind.DECORATED_BY)
     assert any(e.source == fn.qualified_name and e.target == "staticmethod" for e in dec_edges)
+    assert fn.decorators == ["staticmethod"]
 
 
 def test_import(repo, ts_parser):

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ingest.enums.node_kind import NodeKind
 from ingest.enums.edge_kind import EdgeKind
@@ -14,6 +14,7 @@ class Node:
     source: str
     parent_class: str | None = None
     docstring: str | None = None
+    decorators: list[str] = field(default_factory=list)
 
 @dataclass
 class Edge:
