@@ -28,3 +28,31 @@ testpaths = ["tests"]
 markers = [
     "integration: tests requiring docker-compose services (postgres, neo4j) to be running",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "TID",  # flake8-tidy-imports
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["llm_code_cache"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "ARG",  # unused fixture args are common in pytest
+    "E501", # allow longer lines in tests (e.g. embed-text fixtures)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
