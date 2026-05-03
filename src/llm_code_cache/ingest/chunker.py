@@ -1,9 +1,6 @@
 from typing import Iterable
-from llm_code_cache.ingest.constants import MAX_EMBED_TOKENS, TOKEN_ESTIMATE_DIVISOR
-from llm_code_cache.ingest.enums.node_kind import NodeKind
+from llm_code_cache.ingest.constants import MAX_EMBED_TOKENS, TOKEN_ESTIMATE_DIVISOR, EMBEDDABLE_KINDS
 from llm_code_cache.ingest.models import Chunk, Metadata, Node
-
-EMBEDDABLE_KINDS = {NodeKind.FUNCTION, NodeKind.METHOD, NodeKind.CLASS}
 
 
 def build_embed_text(node: Node) -> str: # TODO: handle additional context, parent classes, abstract classes, overrides
@@ -24,10 +21,6 @@ def estimate_tokens(text: str) -> int:
 def chunk_nodes(nodes: Iterable[Node], repo: str) -> Iterable[Chunk]:
     chunks = []
     for node in nodes:
-        if node.kind in EMBEDDABLE_KINDS:
-            embed_node_text = build_embed_text(node)
-            if estimate_tokens(embed_node_text) > MAX_EMBED_TOKENS:
-                continue  # TODO: add handling for oversized objects
-            node_chunk = Chunk(embed_node_text, Metadata.from_node(node, repo))
-            chunks.append(node_chunk)
+        if node.kind in EMBEDDABLE_KINDS and estimate_tokens(text := build_embed_text(node)) <= MAX_EMBED_TOKENS:  # TODO(v1): log + handle oversized nodes
+            chunks.append(Chunk(text, Metadata.from_node(node, repo)))
     return chunks
