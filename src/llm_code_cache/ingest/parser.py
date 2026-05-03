@@ -48,14 +48,21 @@ def _process_class(
     repo_root: Path,
     source: bytes,
     file_qname: str,
-) -> tuple[Node, list[Edge]]:
+) -> tuple[list[Node], list[Edge]]:
     cls, cls_edges = extract_class(defn, path, repo_root, source)
     cls.decorators, dec_edges = extract_decorators(outer, cls.qualified_name, source)
-    return cls, [
-        *cls_edges,
-        *dec_edges,
-        Edge(cls.qualified_name, file_qname, EdgeKind.DEFINED_IN),
-    ]
+    nodes: list[Node] = [cls]
+    edges: list[Edge] = [*cls_edges, *dec_edges, Edge(cls.qualified_name, file_qname, EdgeKind.DEFINED_IN)]
+    body = defn.child_by_field_name(TSFieldName.BODY)
+    if body:
+        for item in body.named_children:
+            mdefn, mouter = _unwrap(item)
+            if mdefn is None or mdefn.type != TSNodeType.FUNCTION_DEF:
+                continue  # TODO(v1): handle nested classes
+            m, m_edges = _process_function(mdefn, mouter, path, repo_root, source, cls.qualified_name, cls.name)
+            nodes.append(m)
+            edges.extend(m_edges)
+    return nodes, edges
 
 
 def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
@@ -81,18 +88,9 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
             edges.extend(fn_edges)
 
         elif defn.type == TSNodeType.CLASS_DEF:
-            cls, cls_edges = _process_class(defn, outer, path, repo_root, source, file_qname)
-            nodes.append(cls)
+            cls_nodes, cls_edges = _process_class(defn, outer, path, repo_root, source, file_qname)
+            nodes.extend(cls_nodes)
             edges.extend(cls_edges)
-            body = defn.child_by_field_name(TSFieldName.BODY)
-            if body:
-                for item in body.named_children:
-                    mdefn, mouter = _unwrap(item)
-                    if mdefn is None or mdefn.type != TSNodeType.FUNCTION_DEF:
-                        continue
-                    m, m_edges = _process_function(mdefn, mouter, path, repo_root, source, cls.qualified_name, cls.name)
-                    nodes.append(m)
-                    edges.extend(m_edges)
     return ParseResult(nodes, edges)
 
 
@@ -228,11 +226,9 @@ def extract_calls(
         node = stack.pop()
         if node.type in TS_DEFINITION_TYPES or node.type == TSNodeType.DECORATED_DEF:
             continue
-        if node.type == TSNodeType.CALL:
-            func = node.child_by_field_name(TSFieldName.FUNCTION)
-            if func:
-                # TODO(v1): resolve textual callee name to qualified_name
-                edges.append(Edge(enclosing_qualified_name, node_text(func, source), EdgeKind.CALLS))
+        if node.type == TSNodeType.CALL and (func := node.child_by_field_name(TSFieldName.FUNCTION)):
+            # TODO(v1): resolve textual callee name to qualified_name
+            edges.append(Edge(enclosing_qualified_name, node_text(func, source), EdgeKind.CALLS))
         stack.extend(node.named_children)
     return edges
 
@@ -263,13 +259,9 @@ def _from_import_edges(
     module_name = node_text(module_node, source) if module_node else ""
     edges: list[Edge] = []
     for child in ts_node.named_children:
-        if child is module_node:
-            continue
-        name_node = _import_name_node(child)
-        if name_node is None:
-            continue
-        name = node_text(name_node, source)
-        edges.append(Edge(file_qualified_name, f"{module_name}.{name}" if module_name else name, EdgeKind.IMPORTS))
+        if child is not module_node and (name_node := _import_name_node(child)):
+            name = node_text(name_node, source)
+            edges.append(Edge(file_qualified_name, f"{module_name}.{name}" if module_name else name, EdgeKind.IMPORTS))
     return edges
 
 
