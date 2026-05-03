@@ -15,21 +15,11 @@ _PY_LANGUAGE = Language(_ts_py_lang())
 
 
 def _unwrap(node: TSNode) -> tuple[TSNode | None, TSNode]:
-    """Return (definition_node, outer_node) for a top-level or class-body child.
-
-    For a decorated_definition, outer is the wrapper (holds decorator children)
-    and definition is the inner function_definition or class_definition.
-    For a bare function/class definition, both are the same node.
-    Returns (None, node) for any other node type.
-    """
-    if node.type == TSNodeType.DECORATED_DEF:
-        inner = next(
-            (c for c in node.named_children if c.type in TS_DEFINITION_TYPES),
-            None,
-        )
-        return inner, node
-    if node.type in TS_DEFINITION_TYPES:
+    ntype = node.type
+    if ntype in TS_DEFINITION_TYPES:
         return node, node
+    elif ntype == TSNodeType.DECORATED_DEF:
+        return node.child_by_field_name(TSFieldName.DEFINITION), node
     return None, node
 
 
@@ -51,15 +41,26 @@ def _process_function(
     ]
 
 
-def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
-    """Parse a single file and return its nodes + edges.
+def _process_class(
+    defn: TSNode,
+    outer: TSNode,
+    path: Path,
+    repo_root: Path,
+    source: bytes,
+    file_qname: str,
+) -> tuple[Node, list[Edge]]:
+    cls, cls_edges = extract_class(defn, path, repo_root, source)
+    cls.decorators, dec_edges = extract_decorators(outer, cls.qualified_name, source)
+    return cls, [
+        *cls_edges,
+        *dec_edges,
+        Edge(cls.qualified_name, file_qname, EdgeKind.DEFINED_IN),
+    ]
 
-    ParseResult has two fields: nodes (list[Node]) and edges (list[Edge]).
-    Both lists may be empty if the file is empty or has only whitespace.
-    """
+
+def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
     source = path.read_bytes()
     tree = ts_parser.parse(source)
-
     file_node = extract_file_node(path, repo_root, source)
     nodes: list[Node] = [file_node]
     edges: list[Edge] = []
@@ -80,13 +81,9 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
             edges.extend(fn_edges)
 
         elif defn.type == TSNodeType.CLASS_DEF:
-            cls, cls_edges = extract_class(defn, path, repo_root, source)
+            cls, cls_edges = _process_class(defn, outer, path, repo_root, source, file_qname)
             nodes.append(cls)
             edges.extend(cls_edges)
-            cls.decorators, dec_edges = extract_decorators(outer, cls.qualified_name, source)
-            edges.extend(dec_edges)
-            edges.append(Edge(cls.qualified_name, file_qname, EdgeKind.DEFINED_IN))
-
             body = defn.child_by_field_name(TSFieldName.BODY)
             if body:
                 for item in body.named_children:
@@ -96,7 +93,6 @@ def parse_file(path: Path, repo_root: Path, ts_parser: TSParser) -> ParseResult:
                     m, m_edges = _process_function(mdefn, mouter, path, repo_root, source, cls.qualified_name, cls.name)
                     nodes.append(m)
                     edges.extend(m_edges)
-
     return ParseResult(nodes, edges)
 
 
@@ -178,37 +174,33 @@ def extract_decorators(
     decorators: list[str] = []
     edges: list[Edge] = []
     for child in ts_node.children:
-        if child.type == TSNodeType.DECORATOR:
-            name_node = child.named_children[0] if child.named_children else None
-            if name_node:
-                text = node_text(name_node, source)
-                decorators.append(text)
-                edges.append(
-                    Edge(decorated_qualified_name, text, EdgeKind.DECORATED_BY)
-                )
+        if child.type != TSNodeType.DECORATOR:
+            continue
+        name_node = child.named_children[0] if child.named_children else None
+        if name_node:
+            text = node_text(name_node, source)
+            decorators.append(text)
+            edges.append(
+                Edge(decorated_qualified_name, text, EdgeKind.DECORATED_BY)
+            )
     return decorators, edges
+
+
+def _inherits_from_edges(qname: str, ts_node: TSNode, source: bytes) -> list[Edge]:
+    args = ts_node.child_by_field_name(TSFieldName.SUPERCLASSES)
+    return [
+        Edge(qname, node_text(base, source), EdgeKind.INHERITS_FROM)
+        for base in (args.named_children if args else [])
+        if base.type in (TSNodeType.IDENTIFIER, TSNodeType.ATTRIBUTE)
+    ]
 
 
 def extract_class(
     ts_node: TSNode, file_path: Path, repo_root: Path, source: bytes
 ) -> tuple[Node, list[Edge]]:
-    """Extract a class node from a class_definition AST node.
-
-    Returns the class Node plus any INHERITS_FROM edges to base classes.
-    Note: inheritance edges may point to unresolved names in v0 (e.g., 'BaseValidator'
-    rather than a fully-qualified target). Resolution happens later.
-    """
     name = node_text(ts_node.child_by_field_name(TSFieldName.NAME), source)
     qname = qualified_name(file_path, repo_root, [name])
-    edges: list[Edge] = []
-
-    args = ts_node.child_by_field_name(TSFieldName.SUPERCLASSES)
-    if args:
-        for base in args.named_children:
-            if base.type in (TSNodeType.IDENTIFIER, TSNodeType.ATTRIBUTE):
-                edges.append(
-                    Edge(qname, node_text(base, source), EdgeKind.INHERITS_FROM)
-                )
+    edges = _inherits_from_edges(qname, ts_node, source)
 
     doc = get_docstring(ts_node, source)
     node = Node(
@@ -227,76 +219,68 @@ def extract_class(
 def extract_calls(
     ts_node: TSNode, enclosing_qualified_name: str, source: bytes
 ) -> list[Edge]:
-    """Walk a function/method body and emit CALLS edges for every call site.
-
-    v0: edges record the *textual* callee name (e.g., 'helpers.check_format'),
-    not the resolved target. A later resolution pass rewrites these.
-    """
+    body = ts_node.child_by_field_name(TSFieldName.BODY)
+    if not body:
+        return []
     edges: list[Edge] = []
-
-    def walk(node: TSNode) -> None:
+    stack: list[TSNode] = list(body.named_children)
+    while stack:
+        node = stack.pop()
+        if node.type in TS_DEFINITION_TYPES or node.type == TSNodeType.DECORATED_DEF:
+            continue
         if node.type == TSNodeType.CALL:
             func = node.child_by_field_name(TSFieldName.FUNCTION)
             if func:
-                edges.append(
-                    Edge(
-                        enclosing_qualified_name,
-                        node_text(func, source),
-                        EdgeKind.CALLS,
-                    )
-                )
-        for child in node.named_children:
-            walk(child)
+                # TODO(v1): resolve textual callee name to qualified_name
+                edges.append(Edge(enclosing_qualified_name, node_text(func, source), EdgeKind.CALLS))
+        stack.extend(node.named_children)
+    return edges
 
-    body = ts_node.child_by_field_name(TSFieldName.BODY)
-    if body:
-        walk(body)
+
+def _import_name_node(child: TSNode) -> TSNode | None:
+    if child.type == TSNodeType.DOTTED_NAME:
+        return child
+    if child.type == TSNodeType.ALIASED_IMPORT:
+        return child.child_by_field_name(TSFieldName.NAME)
+    return None  # TODO(v1): handle wildcard_import (from x import *)
+
+
+def _plain_import_edges(
+    ts_node: TSNode, file_qualified_name: str, source: bytes
+) -> list[Edge]:
+    edges: list[Edge] = []
+    for child in ts_node.named_children:
+        name_node = _import_name_node(child)
+        if name_node:
+            edges.append(Edge(file_qualified_name, node_text(name_node, source), EdgeKind.IMPORTS))
+    return edges
+
+
+def _from_import_edges(
+    ts_node: TSNode, file_qualified_name: str, source: bytes
+) -> list[Edge]:
+    module_node = ts_node.child_by_field_name(TSFieldName.MODULE_NAME)
+    module_name = node_text(module_node, source) if module_node else ""
+    edges: list[Edge] = []
+    for child in ts_node.named_children:
+        if child is module_node:
+            continue
+        name_node = _import_name_node(child)
+        if name_node is None:
+            continue
+        name = node_text(name_node, source)
+        edges.append(Edge(file_qualified_name, f"{module_name}.{name}" if module_name else name, EdgeKind.IMPORTS))
     return edges
 
 
 def extract_imports(
     ts_node: TSNode, file_qualified_name: str, source: bytes
 ) -> list[Edge]:
-    """Walk top-level import statements and emit IMPORTS edges from the file."""
-    edges: list[Edge] = []
-
     if ts_node.type == TSNodeType.IMPORT:
-        for child in ts_node.named_children:
-            if child.type == TSNodeType.DOTTED_NAME:
-                edges.append(
-                    Edge(
-                        file_qualified_name, node_text(child, source), EdgeKind.IMPORTS
-                    )
-                )
-            elif child.type == TSNodeType.ALIASED_IMPORT:
-                name_node = child.child_by_field_name(TSFieldName.NAME)
-                if name_node:
-                    edges.append(
-                        Edge(
-                            file_qualified_name,
-                            node_text(name_node, source),
-                            EdgeKind.IMPORTS,
-                        )
-                    )
-
-    elif ts_node.type == TSNodeType.IMPORT_FROM:
-        module = ts_node.child_by_field_name(TSFieldName.MODULE_NAME)
-        module_name = node_text(module, source) if module else ""
-        for child in ts_node.named_children:
-            if child == module:
-                continue
-            if child.type == TSNodeType.DOTTED_NAME:
-                imported = node_text(child, source)
-                target = f"{module_name}.{imported}" if module_name else imported
-                edges.append(Edge(file_qualified_name, target, EdgeKind.IMPORTS))
-            elif child.type == TSNodeType.ALIASED_IMPORT:
-                name_node = child.child_by_field_name(TSFieldName.NAME)
-                if name_node:
-                    imported = node_text(name_node, source)
-                    target = f"{module_name}.{imported}" if module_name else imported
-                    edges.append(Edge(file_qualified_name, target, EdgeKind.IMPORTS))
-
-    return edges
+        return _plain_import_edges(ts_node, file_qualified_name, source)
+    if ts_node.type == TSNodeType.IMPORT_FROM:
+        return _from_import_edges(ts_node, file_qualified_name, source)
+    return []
 
 
 def get_docstring(ts_node: TSNode, source: bytes) -> str | None:
@@ -305,10 +289,8 @@ def get_docstring(ts_node: TSNode, source: bytes) -> str | None:
     if not body or not body.named_children:
         return None
     first = body.named_children[0]
-    if first.type == TSNodeType.EXPRESSION_STMT:
-        expr = first.named_children[0] if first.named_children else None
-        if expr and expr.type == TSNodeType.STRING:
-            return node_text(expr, source)
+    if first.type == TSNodeType.EXPRESSION_STMT and first.named_children and first.named_children[0].type == TSNodeType.STRING:
+        return node_text(first.named_children[0], source)
     return None
 
 

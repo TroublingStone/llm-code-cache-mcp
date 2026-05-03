@@ -3,9 +3,9 @@ from unittest.mock import patch
 
 import pytest
 
-from ingest.enums.edge_kind import EdgeKind
-from ingest.enums.node_kind import NodeKind
-from ingest.parser import make_ts_parser, parse_file, parse_repo, qualified_name
+from llm_code_cache.ingest.enums.edge_kind import EdgeKind
+from llm_code_cache.ingest.enums.node_kind import NodeKind
+from llm_code_cache.ingest.parser import make_ts_parser, parse_file, parse_repo, qualified_name
 
 
 def nodes_by_kind(result, kind):
