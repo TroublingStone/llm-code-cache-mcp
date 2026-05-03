@@ -1,0 +1,32 @@
+services:
+  neo4j:
+    image: neo4j:5-community
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/password
+    healthcheck:
+      test: ["CMD", "neo4j", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: llmcache
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: llmcache
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmcache"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
