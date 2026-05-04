@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llm_code_cache.ingest.enums.node_kind import NodeKind
+from llm_code_cache.ingest.enums import NodeKind
 from llm_code_cache.ingest.models import Metadata
 from llm_code_cache.vector.models import VectorHit
 from llm_code_cache.vector.store import VectorStore

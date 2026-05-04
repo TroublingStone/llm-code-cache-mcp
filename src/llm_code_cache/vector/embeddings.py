@@ -1,7 +1,7 @@
 from llama_index.core.embeddings import BaseEmbedding
 
 from llm_code_cache.vector.embedding_config import EmbeddingConfig
-from llm_code_cache.vector.enums.embed_provider import EmbedProvider
+from llm_code_cache.vector.enums import EmbedProvider
 
 
 def make_embed_model(config: EmbeddingConfig) -> BaseEmbedding:

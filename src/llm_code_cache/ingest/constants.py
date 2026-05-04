@@ -1,5 +1,4 @@
-from llm_code_cache.ingest.enums.node_kind import NodeKind
-from llm_code_cache.ingest.enums.ts_node_type import TSNodeType
+from llm_code_cache.ingest.enums import NodeKind, TSNodeType
 
 TS_DEFINITION_TYPES = frozenset({TSNodeType.FUNCTION_DEF, TSNodeType.CLASS_DEF})
 EMBEDDABLE_KINDS = {NodeKind.FUNCTION, NodeKind.METHOD, NodeKind.CLASS}

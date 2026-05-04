@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from llama_index.core.schema import NodeWithScore
 
-from llm_code_cache.ingest.enums.node_kind import NodeKind
+from llm_code_cache.ingest.enums import NodeKind
 
 
 @dataclass

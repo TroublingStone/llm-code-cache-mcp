@@ -1,6 +1,6 @@
 import pytest
 
-from llm_code_cache.ingest.enums.node_kind import NodeKind
+from llm_code_cache.ingest.enums import NodeKind
 from llm_code_cache.vector.models import VectorHit
 
 pytestmark = pytest.mark.integration

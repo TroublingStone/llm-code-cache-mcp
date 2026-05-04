@@ -5,9 +5,9 @@ from dataclasses import asdict
 from neo4j import Driver, GraphDatabase
 
 from llm_code_cache.graph import queries
-from llm_code_cache.graph.enums.traversal_direction import TraversalDirection
+from llm_code_cache.graph.enums import TraversalDirection
 from llm_code_cache.graph.models import GraphConfig, GraphDefinitionRecord, GraphNeighborRecord
-from llm_code_cache.ingest.enums.edge_kind import EdgeKind
+from llm_code_cache.ingest.enums import EdgeKind, NodeKind
 from llm_code_cache.ingest.models import Edge, Node, ParseResult
 
 logger = logging.getLogger(__name__)

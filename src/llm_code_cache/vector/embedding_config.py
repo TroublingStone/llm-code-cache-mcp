@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from llm_code_cache.vector.enums.embed_provider import EmbedProvider
+from llm_code_cache.vector.enums import EmbedProvider
 
 
 @dataclass

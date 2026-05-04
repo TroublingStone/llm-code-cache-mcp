@@ -16,6 +16,7 @@ def _load_statements(name: str) -> list[str]:
 CONSTRAINTS: list[str] = _load_statements("constraints.cypher")
 INDEXES: list[str] = _load_statements("indexes.cypher")
 CLEAR_REPO: str = _load("clear_repo.cypher")
+FIND_DEFINITION: str = _load("find_definition.cypher")
 
 _UPSERT_NODES_TEMPLATE: str = _load("upsert_nodes.cypher")
 _UPSERT_EDGES_TEMPLATE: str = _load("upsert_edges.cypher")
