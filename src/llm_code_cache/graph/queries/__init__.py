@@ -14,6 +14,8 @@ def _load_statements(name: str) -> list[str]:
 
 
 CONSTRAINTS: list[str] = _load_statements("constraints.cypher")
+# TODO(v1): per-repo indexes (e.g. on n.repo) land here when the cross-repo
+# schema is decided (DESIGN.md Open Questions). Node has no repo field today.
 INDEXES: list[str] = _load_statements("indexes.cypher")
 CLEAR_REPO: str = _load("clear_repo.cypher")
 FIND_DEFINITION: str = _load("find_definition.cypher")

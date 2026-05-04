@@ -1,4 +1,16 @@
 UNWIND $edges AS edge
 MATCH (a {qualified_name: edge.source})
-MATCH (b {qualified_name: edge.target})
-MERGE (a)-[r:__REL_TYPE__]->(b)
+OPTIONAL MATCH (real {qualified_name: edge.target})
+WHERE NOT real:Unresolved
+WITH edge, a, real
+CALL {
+  WITH edge, real
+  WITH edge, real WHERE real IS NULL
+  MERGE (stub:Unresolved {qualified_name: edge.target})
+  RETURN stub
+  UNION
+  WITH edge, real
+  WITH edge, real WHERE real IS NOT NULL
+  RETURN real AS stub
+}
+MERGE (a)-[r:__REL_TYPE__]->(stub)

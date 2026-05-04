@@ -145,6 +145,8 @@ class GraphStore:
         if depth < 1 or depth > _MAX_DEPTH:
             raise ValueError(f"depth must be between 1 and {_MAX_DEPTH}, got {depth}")
 
+        # At depth>1, edge_kind on each neighbor record is the type of the LAST
+        # relationship in the traversal path; intermediate hops are not surfaced.
         rel_types = "|".join(k.upper() for k in edge_kinds)
         arrow_left, arrow_right = _DIRECTION_ARROWS[direction]
         depth_clause = "" if depth == 1 else f"*1..{depth}"
@@ -165,10 +167,15 @@ class GraphStore:
     def _to_neighbor_record(self, record, direction: TraversalDirection) -> GraphNeighborRecord:
         n = record["neighbor"]
         f = record["f"]
+        labels = record["labels"]
+        # Single-label invariant: writer assigns exactly one kind label per node.
+        # :Unresolved stubs (textual edge targets) carry no kind; v1 resolution rewrites them.
+        kind: NodeKind | None = None if "Unresolved" in labels else NodeKind(labels[0].lower())
+        qn = n["qualified_name"]
         return GraphNeighborRecord(
-            qualified_name=n["qualified_name"],
-            name=n["name"],
-            kind=NodeKind(record["labels"][0].lower()),
+            qualified_name=qn,
+            name=n.get("name") or qn.rsplit(".", 1)[-1],
+            kind=kind,
             edge_kind=EdgeKind(record["edge_type"].lower()),
             direction=direction,
             file_path=f["path"] if f is not None else n.get("path", ""),

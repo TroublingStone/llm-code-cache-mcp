@@ -29,7 +29,9 @@ class GraphDefinitionRecord:
 class GraphNeighborRecord:
     qualified_name: str          # the neighbor's identifier
     name: str
-    kind: NodeKind
+    # kind is None for :Unresolved stubs (textual edge targets the v0 parser couldn't
+    # resolve to a real node). The v1 resolution pass replaces these with real kinds.
+    kind: NodeKind | None
     edge_kind: EdgeKind          # how this neighbor relates: CALLS, IMPORTS, INHERITS_FROM, DECORATED_BY
     direction: TraversalDirection
     # file context, useful for display

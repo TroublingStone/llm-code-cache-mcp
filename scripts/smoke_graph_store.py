@@ -15,7 +15,7 @@ from textwrap import dedent
 
 from llm_code_cache.graph import GraphConfig, TraversalDirection
 from llm_code_cache.graph.store import GraphStore
-from llm_code_cache.ingest import EdgeKind, NodeKind
+from llm_code_cache.ingest import EdgeKind
 from llm_code_cache.ingest.parser import parse_repo
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -147,7 +147,7 @@ def main() -> int:
         )
         print(f"  count = {len(nbrs)}")
         for nb in nbrs:
-            print(f"    -> {nb.kind:8s} {nb.qualified_name}  via {nb.edge_kind}")
+            print(f"    -> {(nb.kind or "stub"):8s} {nb.qualified_name}  via {nb.edge_kind}")
 
         banner("neighbors: CALLS incoming to src.auth.authenticate")
         nbrs = store.neighbors(
@@ -157,7 +157,7 @@ def main() -> int:
         )
         print(f"  count = {len(nbrs)}")
         for nb in nbrs:
-            print(f"    <- {nb.kind:8s} {nb.qualified_name}  via {nb.edge_kind}")
+            print(f"    <- {(nb.kind or "stub"):8s} {nb.qualified_name}  via {nb.edge_kind}")
 
         banner("neighbors: DEFINED_IN outgoing from src.repo.UserRepo.find_by_token")
         nbrs = store.neighbors(
@@ -167,7 +167,7 @@ def main() -> int:
         )
         print(f"  count = {len(nbrs)}")
         for nb in nbrs:
-            print(f"    -> {nb.kind:8s} {nb.qualified_name}  via {nb.edge_kind}")
+            print(f"    -> {(nb.kind or "stub"):8s} {nb.qualified_name}  via {nb.edge_kind}")
 
         banner("neighbors: INHERITS_FROM outgoing from src.repo.UserRepo")
         nbrs = store.neighbors(
@@ -177,7 +177,7 @@ def main() -> int:
         )
         print(f"  count = {len(nbrs)}")
         for nb in nbrs:
-            print(f"    -> {nb.kind:8s} {nb.qualified_name}  via {nb.edge_kind}")
+            print(f"    -> {(nb.kind or "stub"):8s} {nb.qualified_name}  via {nb.edge_kind}")
 
         banner("neighbors: IMPORTS outgoing from src.auth (file)")
         nbrs = store.neighbors(
@@ -187,7 +187,7 @@ def main() -> int:
         )
         print(f"  count = {len(nbrs)}")
         for nb in nbrs:
-            print(f"    -> {nb.kind:8s} {nb.qualified_name}  via {nb.edge_kind}")
+            print(f"    -> {(nb.kind or "stub"):8s} {nb.qualified_name}  via {nb.edge_kind}")
 
         banner("neighbors: depth=2 BOTH (CALLS|DEFINED_IN) from src.auth.authenticate")
         nbrs = store.neighbors(
@@ -198,7 +198,7 @@ def main() -> int:
         )
         print(f"  count = {len(nbrs)}")
         for nb in nbrs:
-            print(f"    ~~ {nb.kind:8s} {nb.qualified_name}  via {nb.edge_kind} ({nb.direction})")
+            print(f"    ~~ {(nb.kind or "stub"):8s} {nb.qualified_name}  via {nb.edge_kind} ({nb.direction})")
 
         banner("get_definition for unknown symbol (expect None)")
         miss = store.get_definition("does.not.exist")

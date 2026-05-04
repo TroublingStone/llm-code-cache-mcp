@@ -148,7 +148,31 @@ def test_import_from(repo, ts_parser):
 
     file_node = nodes_by_kind(result, NodeKind.FILE)[0]
     imports = edges_by_kind(result, EdgeKind.IMPORTS)
-    assert any(e.source == file_node.qualified_name and e.target == "pathlib.Path" for e in imports)
+    assert len(imports) == 1
+    assert imports[0].source == file_node.qualified_name
+    assert imports[0].target == "pathlib.Path"
+
+
+def test_import_from_multiple_names(repo, ts_parser):
+    root, write = repo
+    path = write("mod.py", "from x.y import a, b\n")
+    result = parse_file(path, root, ts_parser)
+
+    file_node = nodes_by_kind(result, NodeKind.FILE)[0]
+    imports = edges_by_kind(result, EdgeKind.IMPORTS)
+    assert len(imports) == 2
+    assert sorted(e.target for e in imports) == ["x.y.a", "x.y.b"]
+    assert all(e.source == file_node.qualified_name for e in imports)
+
+
+def test_import_from_aliased(repo, ts_parser):
+    root, write = repo
+    path = write("mod.py", "from pkg.sub import a as b\n")
+    result = parse_file(path, root, ts_parser)
+
+    imports = edges_by_kind(result, EdgeKind.IMPORTS)
+    assert len(imports) == 1
+    assert imports[0].target == "pkg.sub.a"
 
 
 def test_aliased_import(repo, ts_parser):

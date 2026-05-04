@@ -255,11 +255,18 @@ def _from_import_edges(
 ) -> list[Edge]:
     module_node = ts_node.child_by_field_name(TSFieldName.MODULE_NAME)
     module_name = node_text(module_node, source) if module_node else ""
+    # tree-sitter returns fresh Python wrappers for the same C node when accessed via
+    # child_by_field_name vs iterating named_children; compare on .id (stable C-node key).
+    module_id = module_node.id if module_node is not None else None
     edges: list[Edge] = []
     for child in ts_node.named_children:
-        if child is not module_node and (name_node := _import_name_node(child)):
-            name = node_text(name_node, source)
-            edges.append(Edge(file_qualified_name, f"{module_name}.{name}" if module_name else name, EdgeKind.IMPORTS))
+        if child.id == module_id:
+            continue
+        name_node = _import_name_node(child)
+        if not name_node:
+            continue
+        name = node_text(name_node, source)
+        edges.append(Edge(file_qualified_name, f"{module_name}.{name}" if module_name else name, EdgeKind.IMPORTS))
     return edges
 
 
