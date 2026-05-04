@@ -40,8 +40,6 @@ def test_get_definition_unknown_returns_none(graph_store, parsed_sample_repo):
 def test_get_definition_filters_unresolved_stubs(graph_store, parsed_sample_repo):
     graph_store.write_parse_result(parsed_sample_repo)
 
-    # `verify_signature` is a textual CALLS target; it lands as :Unresolved alongside
-    # the real `src.auth.verify_signature` Function node. find_definition must filter stubs.
     assert graph_store.get_definition("verify_signature") is None
     real = graph_store.get_definition("src.auth.verify_signature")
     assert real is not None
@@ -74,7 +72,6 @@ def test_neighbors_calls_creates_unresolved_stubs(graph_store, parsed_sample_rep
 
     qns = sorted(n.qualified_name for n in nbrs)
     assert qns == ["sha256_hex", "verify_signature"]
-    # Textual CALLS targets land as :Unresolved stubs (kind=None).
     assert all(n.kind is None for n in nbrs)
     assert all(n.edge_kind == EdgeKind.CALLS for n in nbrs)
 
@@ -89,7 +86,6 @@ def test_neighbors_inherits_from_creates_unresolved_stub(graph_store, parsed_sam
     )
 
     assert len(nbrs) == 1
-    # Parser emits the textual base name; v1 resolution rewrites to src.repo.BaseRepo.
     assert nbrs[0].qualified_name == "BaseRepo"
     assert nbrs[0].kind is None
 
@@ -102,9 +98,6 @@ def test_neighbors_imports_resolves_when_target_matches_real_qname(graph_store, 
         edge_kinds=[EdgeKind.IMPORTS],
         direction=TraversalDirection.OUTGOING,
     )
-
-    # `from src.utils import sha256_hex` produces target `src.utils.sha256_hex`,
-    # which matches the real Function node — should resolve, not create a stub.
     assert len(nbrs) == 1
     assert nbrs[0].qualified_name == "src.utils.sha256_hex"
     assert nbrs[0].kind == NodeKind.FUNCTION
@@ -121,8 +114,6 @@ def test_neighbors_depth_2_traverses_multi_hop_path(graph_store, parsed_sample_r
     )
 
     qns = {n.qualified_name for n in nbrs}
-    # 1-hop: src.auth (DEFINED_IN), :Unresolved sha256_hex/verify_signature stubs (CALLS).
-    # 2-hop: from src.auth back along DEFINED_IN to src.auth.verify_signature (sibling).
     assert "src.auth" in qns
     assert "src.auth.verify_signature" in qns
 

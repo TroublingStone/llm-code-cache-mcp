@@ -48,13 +48,10 @@ def test_vector_hit_fields_populated(vector_store, sample_chunks):
     assert hit.source
 
 
-# --- full ingest pipeline tests (parse_repo -> chunk_nodes -> upsert -> search) ---
-
 
 def test_pipeline_only_embeddable_kinds_are_chunked(parsed_sample_repo, sample_repo_name):
     chunks = list(chunk_nodes(parsed_sample_repo.nodes, sample_repo_name))
 
-    # File nodes are not embeddable; Function/Method/Class are.
     kinds = {c.metadata.kind for c in chunks}
     assert NodeKind.FILE not in kinds
     assert kinds <= {NodeKind.FUNCTION, NodeKind.METHOD, NodeKind.CLASS}
@@ -91,5 +88,4 @@ def test_pipeline_idempotent_reupsert_does_not_duplicate(vector_store, parsed_sa
 
     hits = vector_store.search("authenticate user", top_k=10)
     qns = [h.qualified_name for h in hits]
-    # Node id_= qualified_name; second upsert overwrites, never duplicates.
     assert len(qns) == len(set(qns))

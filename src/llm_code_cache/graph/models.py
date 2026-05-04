@@ -6,10 +6,10 @@ from llm_code_cache.ingest.enums import EdgeKind, NodeKind
 
 @dataclass
 class GraphConfig:
-    uri: str          # e.g. "bolt://localhost:7687"
-    user: str         # e.g. "neo4j"
-    password: str     # from env
-    database: str = "neo4j"  # default DB name; usually fine
+    uri: str
+    user: str
+    password: str
+    database: str = "neo4j"
 
 @dataclass
 class GraphDefinitionRecord:
@@ -19,7 +19,6 @@ class GraphDefinitionRecord:
     docstring: str | None
     parent_class: str | None
     decorators: list[str]
-    # file context, joined from DEFINED_IN
     file_path: str
     start_line: int
     end_line: int
@@ -34,7 +33,6 @@ class GraphNeighborRecord:
     kind: NodeKind | None
     edge_kind: EdgeKind          # how this neighbor relates: CALLS, IMPORTS, INHERITS_FROM, DECORATED_BY
     direction: TraversalDirection
-    # file context, useful for display
     file_path: str
     start_line: int
     end_line: int

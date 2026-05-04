@@ -18,12 +18,6 @@ EMBED_DIM = 384
 
 SAMPLE_REPO_NAME = "test-repo"
 
-# A tiny repo with cross-file calls, imports, and inheritance — exercises:
-#   - DEFINED_IN edges (file/method/function -> parent)
-#   - CALLS with textual targets (sha256_hex, verify_signature, authenticate, bool, ...)
-#   - INHERITS_FROM with textual target (BaseRepo)
-#   - IMPORTS that resolve to a real qualified_name (src.utils.sha256_hex)
-#   - Embeddable chunks for vector search (Function/Method/Class)
 SAMPLE_FILES: dict[str, str] = {
     "src/auth.py": dedent(
         '''
@@ -94,8 +88,6 @@ def parsed_sample_repo(sample_repo):
     return parse_repo(paths, root)
 
 
-# --- postgres / vector store fixtures -----------------------------------------
-
 
 @dataclass
 class PGConfig:
@@ -137,7 +129,6 @@ def embed_model():
 
 
 def _drop_test_table(pg_config: PGConfig) -> None:
-    # llama-index prefixes table names with "data_".
     full_name = f"data_{pg_config.table_name}"
     conn = psycopg2.connect(
         dbname=pg_config.database,
@@ -162,8 +153,6 @@ def vector_store(pg_config, embed_model, _postgres_available):
     yield store
     _drop_test_table(pg_config)
 
-
-# --- neo4j / graph store fixtures ---------------------------------------------
 
 
 @pytest.fixture(scope="session")
