@@ -168,13 +168,21 @@ class GraphStore:
         n = record["neighbor"]
         f = record["f"]
         labels = record["labels"]
-        # Single-label invariant: writer assigns exactly one kind label per node.
-        # :Unresolved stubs (textual edge targets) carry no kind; v1 resolution rewrites them.
-        kind: NodeKind | None = None if "Unresolved" in labels else NodeKind(labels[0].lower())
-        qn = n["qualified_name"]
+
+        if "Unresolved" in labels:
+            text_ref: str | None = n["text_ref"]
+            qualified_name: str | None = None
+            kind: NodeKind | None = None
+            name = text_ref.rsplit(".", 1)[-1]
+        else:
+            qualified_name = n["qualified_name"]
+            text_ref = None
+            kind = NodeKind(labels[0].lower())
+            name = n.get("name") or qualified_name.rsplit(".", 1)[-1]
         return GraphNeighborRecord(
-            qualified_name=qn,
-            name=n.get("name") or qn.rsplit(".", 1)[-1],
+            qualified_name=qualified_name,
+            text_ref=text_ref,
+            name=name,
             kind=kind,
             edge_kind=EdgeKind(record["edge_type"].lower()),
             direction=direction,

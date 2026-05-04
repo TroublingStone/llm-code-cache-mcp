@@ -26,10 +26,13 @@ class GraphDefinitionRecord:
 
 @dataclass
 class GraphNeighborRecord:
-    qualified_name: str          # the neighbor's identifier
+    # Real nodes set qualified_name + kind; :Unresolved stubs set text_ref instead.
+    # Invariant: (qualified_name is None) == (kind is None) == (text_ref is not None).
+    # The v1 resolver promotes text_ref to a canonical qualified_name and assigns a
+    # real kind, dropping the :Unresolved label.
+    qualified_name: str | None
+    text_ref: str | None
     name: str
-    # kind is None for :Unresolved stubs (textual edge targets the v0 parser couldn't
-    # resolve to a real node). The v1 resolution pass replaces these with real kinds.
     kind: NodeKind | None
     edge_kind: EdgeKind          # how this neighbor relates: CALLS, IMPORTS, INHERITS_FROM, DECORATED_BY
     direction: TraversalDirection

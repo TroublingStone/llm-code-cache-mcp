@@ -104,6 +104,8 @@ flowchart LR
 
 **Plan.** A separate resolution pass over the graph after extraction. Edges are rewritten in place from textual targets to canonical `qualified_name` targets. Smartness improvements live entirely in the resolution pass.
 
+**Stub representation.** Until v1 resolution lands, each unresolved textual edge target creates a `:Unresolved` stub keyed by `text_ref` (the raw textual reference). Real nodes use `qualified_name` exclusively; the two properties live in disjoint namespaces, so a real `(:Class {qualified_name: "BaseRepo"})` and an `(:Unresolved {text_ref: "BaseRepo"})` coexist without collision. The v1 resolver walks `:Unresolved` nodes, resolves `text_ref` to a canonical `qualified_name`, rewrites the incoming edge's endpoint to the real node, and deletes the stub.
+
 **Tradeoff.** v0 graph queries against unresolved edges return weaker results — `find_callers(validate)` may return any function calling something named `validate`, regardless of which one. Acceptable for v0 demo on small repos; the resolution pass closes the gap.
 
 ---

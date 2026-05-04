@@ -6,7 +6,7 @@ WITH edge, a, real
 CALL {
   WITH edge, real
   WITH edge, real WHERE real IS NULL
-  MERGE (stub:Unresolved {qualified_name: edge.target})
+  MERGE (stub:Unresolved {text_ref: edge.target})
   RETURN stub
   UNION
   WITH edge, real
