@@ -5,15 +5,16 @@ from llama_index.core import VectorStoreIndex
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import TextNode
+from llama_index.core.vector_stores import FilterOperator, MetadataFilter, MetadataFilters
 from llama_index.vector_stores.postgres import PGVectorStore
 
 from llm_code_cache.ingest.models import Chunk, Metadata
-from llm_code_cache.vector.models import VectorHit
+from llm_code_cache.vector.models import VectorConfig, VectorHit
 
 logger = logging.getLogger(__name__)
 
 class VectorStore:
-    def __init__(self, config, embed_dim: int, embed_model: BaseEmbedding) -> None:
+    def __init__(self, config: VectorConfig, embed_dim: int, embed_model: BaseEmbedding) -> None:
         self._config = config
         self._embed_dim = embed_dim
         self._embed_model = embed_model
@@ -69,6 +70,21 @@ class VectorStore:
         nodes = [self._chunk_to_text_node(c) for c in chunks]
         self.index.insert_nodes(nodes)
         logger.info("upserted %d chunks", len(nodes))
+
+    def clear_repo(self, repo: str) -> None:
+        """Drop all vectors whose metadata.repo matches the given repo."""
+        filters = MetadataFilters(
+            filters=[MetadataFilter(key="repo", value=repo, operator=FilterOperator.EQ)]
+        )
+        self.connection.delete_nodes(filters=filters)
+        logger.info("cleared repo from vector store: repo=%s", repo)
+
+    def close(self) -> None:
+        # TODO(v1): release pool when PGVectorStore exposes one.
+        self._connection = None
+        self._index = None
+        self._retriever = None
+        self._retriever_top_k = None
 
     def _chunk_to_text_node(self, chunk: Chunk) -> TextNode:
         return TextNode(

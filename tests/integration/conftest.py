@@ -1,6 +1,5 @@
 import os
 import socket
-from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
 from urllib.parse import urlparse
@@ -11,6 +10,7 @@ import pytest
 from llm_code_cache.graph import GraphConfig
 from llm_code_cache.graph.store import GraphStore
 from llm_code_cache.ingest.parser import parse_repo
+from llm_code_cache.vector import VectorConfig
 from llm_code_cache.vector.store import VectorStore
 
 TEST_TABLE_NAME = "test_vectors"
@@ -89,19 +89,9 @@ def parsed_sample_repo(sample_repo):
 
 
 
-@dataclass
-class PGConfig:
-    database: str
-    host: str
-    port: int
-    user: str
-    password: str
-    table_name: str
-
-
 @pytest.fixture(scope="session")
-def pg_config() -> PGConfig:
-    return PGConfig(
+def pg_config() -> VectorConfig:
+    return VectorConfig(
         database=os.environ.get("PG_DATABASE", "llmcache"),
         host=os.environ.get("PG_HOST", "localhost"),
         port=int(os.environ.get("PG_PORT", "5432")),
@@ -128,7 +118,7 @@ def embed_model():
     return HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
 
-def _drop_test_table(pg_config: PGConfig) -> None:
+def _drop_test_table(pg_config: VectorConfig) -> None:
     full_name = f"data_{pg_config.table_name}"
     conn = psycopg2.connect(
         dbname=pg_config.database,

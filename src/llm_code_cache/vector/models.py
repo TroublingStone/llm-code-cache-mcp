@@ -6,6 +6,16 @@ from llm_code_cache.ingest.enums import NodeKind
 
 
 @dataclass
+class VectorConfig:
+    database: str
+    host: str
+    port: int
+    user: str
+    password: str
+    table_name: str
+
+
+@dataclass
 class VectorHit:
     qualified_name: str
     score: float
