@@ -163,6 +163,35 @@ def test_search_maps_results_to_vector_hits(connected_store):
     assert hit.source == "def fn(): ..."
 
 
+def test_clear_repo_calls_delete_nodes_with_repo_filter(connected_store):
+    store, pg_cls, _index_cls, _fake_index = connected_store
+    fake_connection = pg_cls.from_params.return_value
+
+    store.clear_repo("myrepo")
+
+    fake_connection.delete_nodes.assert_called_once()
+    filters = fake_connection.delete_nodes.call_args.kwargs["filters"]
+    assert len(filters.filters) == 1
+    f = filters.filters[0]
+    assert f.key == "repo"
+    assert f.value == "myrepo"
+
+
+def test_close_resets_state(connected_store):
+    store, _pg_cls, _index_cls, _fake_index = connected_store
+    _ = store.index  # populate cached _index
+    _ = store._get_retriever(5)
+
+    store.close()
+
+    assert store._connection is None
+    assert store._index is None
+    assert store._retriever is None
+    assert store._retriever_top_k is None
+    with pytest.raises(RuntimeError, match="connect"):
+        _ = store.connection
+
+
 def test_vector_hit_from_node():
     fake_node = MagicMock()
     fake_node.metadata = {
