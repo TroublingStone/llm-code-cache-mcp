@@ -20,6 +20,7 @@ FIND_DEFINITION: str = _load("find_definition.cypher")
 
 _UPSERT_NODES_TEMPLATE: str = _load("upsert_nodes.cypher")
 _UPSERT_EDGES_TEMPLATE: str = _load("upsert_edges.cypher")
+_GET_NEIGHBORS_TEMPLATE: str = _load("get_neighbors.cypher")
 
 
 def upsert_nodes_query(label: str) -> str:
@@ -28,3 +29,14 @@ def upsert_nodes_query(label: str) -> str:
 
 def upsert_edges_query(rel_type: str) -> str:
     return _UPSERT_EDGES_TEMPLATE.replace("__REL_TYPE__", rel_type)
+
+
+def get_neighbors_query(
+    arrow_left: str, arrow_right: str, rel_types: str, depth_clause: str
+) -> str:
+    return _GET_NEIGHBORS_TEMPLATE.format(
+        arrow_left=arrow_left,
+        arrow_right=arrow_right,
+        rel_types=rel_types,
+        depth_clause=depth_clause,
+    )
