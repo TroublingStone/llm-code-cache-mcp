@@ -41,4 +41,65 @@ Vector search alone fails on structural questions ("what calls this function tra
 | "Find similar functions to `process_order` that might refactor together" | Hybrid — vector for similarity, graph to scope by module |
 
 The agent picks per query. Tool descriptions are written so the right choice is unambiguous.
-See [DESIGN.md](./DESIGN.md) for the full architectural reasoning.
+
+## Status
+
+v0, in active development. End-to-end pipeline runs and the MCP server starts; not yet hardened or used in anger.
+
+What works today:
+- Single-repo, Python-only indexing via a CLI (`llm-code-cache-index`).
+- One parser feeds both stores: Neo4j for `File`/`Function`/`Method`/`Class` nodes and `CALLS`/`IMPORTS`/`DEFINED_IN`/`INHERITS_FROM`/`DECORATED_BY` edges; pgvector for embeddings of functions, methods, and classes.
+- Three MCP tools over stdio: `find_definition`, `find_usages`, `semantic_query`.
+- Cross-store identity: every vector hit's `qualified_name` is a real graph node, so semantic results can be pivoted into structural traversals.
+- Swappable embedding backend: HuggingFace local (default) or Amazon Bedrock Titan via env config.
+
+Known limitations:
+- Symbol resolution is textual. A call like `helper.validate(...)` records `helper.validate` as the edge target, not `utils.helpers.validate`. A resolution pass is planned for v1; until then, `find_usages` is approximate.
+- No incremental indexing; every run is a full reindex of the target tree.
+- The MCP server has been verified via its underlying query layer but has not been driven by a live MCP client yet (Inspector, Claude Code, etc.).
+- Multi-language, cross-repo indexing, watch mode, composite tools, and HTTP transport are explicitly out of scope for v0.
+
+See [CLAUDE.md](./CLAUDE.md) for the full v0 scope and [DESIGN.md](./DESIGN.md) for architectural reasoning.
+
+## Quickstart
+
+Prerequisites: Docker (with `docker compose`), [`uv`](https://docs.astral.sh/uv/), Python 3.14+.
+
+```bash
+# 1. Start Neo4j + Postgres (pgvector) via docker-compose
+docker compose up -d
+
+# 2. Install dependencies into a local .venv
+uv sync --extra dev
+
+# 3. Index a Python repository (use --clear on subsequent runs to drop stale data)
+uv run llm-code-cache-index ./path/to/repo --clear
+
+# 4. Run the MCP server (stdio transport; foreground)
+uv run llm-code-cache-mcp
+```
+
+To register the server with an MCP client (e.g. Claude Desktop, Claude Code), add an entry like:
+
+```json
+{
+  "mcpServers": {
+    "llm-code-cache": {
+      "command": "uv",
+      "args": ["run", "--directory", "/absolute/path/to/llm-code-cache-mcp", "llm-code-cache-mcp"]
+    }
+  }
+}
+```
+
+Defaults assume the docker-compose services on `localhost` with the credentials shipped in `docker-compose.yml`. Override via environment variables (`NEO4J_URI`, `NEO4J_PASSWORD`, `PG_HOST`, `EMBED_PROVIDER`, `EMBED_MODEL_NAME`, `AWS_REGION`, …); see `src/llm_code_cache/config.py` for the full list.
+
+## MCP Tools
+
+| Tool | Use when | Returns |
+|---|---|---|
+| `find_definition(qualified_name)` | You already know the canonical name (e.g. `pkg.module.Class.method`) and want its source. | Source, file path, line range, docstring, parent class, decorators. |
+| `find_usages(qualified_name)` | You need callers, importers, subclasses, or decorator users of a known symbol. | List of incoming references with location. v0 references are textual; expect false positives for common names. |
+| `semantic_query(query, top_k=5)` | You only have a fuzzy description ("JWT validation"). | Ranked hits with `qualified_name` you can hand to the other two tools. |
+
+Tool docstrings in the MCP server are deliberate: they instruct the calling agent on which tool to pick. Composite tools (e.g. blast-radius analysis) are deferred until observed usage justifies them.
