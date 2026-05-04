@@ -4,9 +4,10 @@ from dataclasses import asdict
 
 from neo4j import Driver, GraphDatabase, Record
 
-from llm_code_cache.graph import GraphConfig, GraphDefinitionRecord, GraphNeighborRecord, TraversalDirection
 from llm_code_cache.graph import queries
-from llm_code_cache.ingest import EdgeKind, NodeKind, Edge, Node, ParseResult
+from llm_code_cache.graph.enums import TraversalDirection
+from llm_code_cache.graph.models import GraphConfig, GraphDefinitionRecord, GraphNeighborRecord
+from llm_code_cache.ingest import Edge, EdgeKind, Node, NodeKind, ParseResult
 
 logger = logging.getLogger(__name__)
 
