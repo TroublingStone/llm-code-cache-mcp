@@ -6,12 +6,12 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "boto3>=1.40.61",
-    "chromadb>=1.5.8",
     "httpx>=0.28.1",
     "llama-index>=0.14.21",
     "llama-index-embeddings-bedrock>=0.8.0",
     "llama-index-embeddings-huggingface>=0.7.0",
-    "llama-index-vector-stores-chroma>=0.5.5",
+    "llama-index-vector-stores-postgres>=0.3.0",
+    "psycopg2-binary>=2.9",
     "mcp[cli]>=1.27.0",
     "ruff>=0.15.12",
     "tree-sitter>=0.25.2",
@@ -25,3 +25,34 @@ dev = ["pytest>=8.0"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+    "integration: tests requiring docker-compose services (postgres, neo4j) to be running",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "TID",  # flake8-tidy-imports
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["llm_code_cache"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "ARG",  # unused fixture args are common in pytest
+    "E501", # allow longer lines in tests (e.g. embed-text fixtures)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

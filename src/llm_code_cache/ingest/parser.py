@@ -1,15 +1,13 @@
 from pathlib import Path
 
-from llm_code_cache.ingest.constants import SOURCE_ENCODING, TS_DEFINITION_TYPES
-from llm_code_cache.ingest.enums.edge_kind import EdgeKind
-from llm_code_cache.ingest.enums.node_kind import NodeKind
-from llm_code_cache.ingest.enums.ts_field_name import TSFieldName
-from llm_code_cache.ingest.enums.ts_node_type import TSNodeType
-from llm_code_cache.ingest.models import Edge, Node, ParseResult
 from tree_sitter import Language
 from tree_sitter import Node as TSNode
 from tree_sitter import Parser as TSParser
 from tree_sitter_python import language as _ts_py_lang
+
+from llm_code_cache.ingest.constants import SOURCE_ENCODING, TS_DEFINITION_TYPES
+from llm_code_cache.ingest.enums import EdgeKind, NodeKind, TSFieldName, TSNodeType
+from llm_code_cache.ingest.models import Edge, Node, ParseResult
 
 _PY_LANGUAGE = Language(_ts_py_lang())
 
@@ -257,11 +255,18 @@ def _from_import_edges(
 ) -> list[Edge]:
     module_node = ts_node.child_by_field_name(TSFieldName.MODULE_NAME)
     module_name = node_text(module_node, source) if module_node else ""
+    # tree-sitter returns fresh Python wrappers for the same C node when accessed via
+    # child_by_field_name vs iterating named_children; compare on .id (stable C-node key).
+    module_id = module_node.id if module_node is not None else None
     edges: list[Edge] = []
     for child in ts_node.named_children:
-        if child is not module_node and (name_node := _import_name_node(child)):
-            name = node_text(name_node, source)
-            edges.append(Edge(file_qualified_name, f"{module_name}.{name}" if module_name else name, EdgeKind.IMPORTS))
+        if child.id == module_id:
+            continue
+        name_node = _import_name_node(child)
+        if not name_node:
+            continue
+        name = node_text(name_node, source)
+        edges.append(Edge(file_qualified_name, f"{module_name}.{name}" if module_name else name, EdgeKind.IMPORTS))
     return edges
 
 
@@ -281,7 +286,11 @@ def get_docstring(ts_node: TSNode, source: bytes) -> str | None:
     if not body or not body.named_children:
         return None
     first = body.named_children[0]
-    if first.type == TSNodeType.EXPRESSION_STMT and first.named_children and first.named_children[0].type == TSNodeType.STRING:
+    if (
+        first.type == TSNodeType.EXPRESSION_STMT
+        and first.named_children
+        and first.named_children[0].type == TSNodeType.STRING
+    ):
         return node_text(first.named_children[0], source)
     return None
 

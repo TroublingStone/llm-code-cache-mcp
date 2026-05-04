@@ -104,6 +104,8 @@ flowchart LR
 
 **Plan.** A separate resolution pass over the graph after extraction. Edges are rewritten in place from textual targets to canonical `qualified_name` targets. Smartness improvements live entirely in the resolution pass.
 
+**Stub representation.** Until v1 resolution lands, each unresolved textual edge target creates a `:Unresolved` stub keyed by `text_ref` (the raw textual reference). Real nodes use `qualified_name` exclusively; the two properties live in disjoint namespaces, so a real `(:Class {qualified_name: "BaseRepo"})` and an `(:Unresolved {text_ref: "BaseRepo"})` coexist without collision. The v1 resolver walks `:Unresolved` nodes, resolves `text_ref` to a canonical `qualified_name`, rewrites the incoming edge's endpoint to the real node, and deletes the stub.
+
 **Tradeoff.** v0 graph queries against unresolved edges return weaker results — `find_callers(validate)` may return any function calling something named `validate`, regardless of which one. Acceptable for v0 demo on small repos; the resolution pass closes the gap.
 
 ---
@@ -135,11 +137,31 @@ flowchart LR
 
 ---
 
+## Vector Store Backend
+
+**Question.** Which vector store does v0 ship with?
+
+**Considered.**
+- Local Chroma persistence. Original v0 plan. Zero extra services, single-process; great for dev and demo.
+- pgvector on Postgres. Originally tagged for v1. Requires running Postgres (already in `docker-compose` for other reasons), but reuses a familiar operational surface.
+
+**Decision (v0).** pgvector. Postgres is already running in `docker-compose`, so the operational cost of pgvector is roughly zero in this project — adding Chroma would mean shipping *two* persistence stories instead of one. pgvector also colocates the vector data on the same operational substrate we expect to use in production, which makes future cross-store work (e.g., joining vector hits with Postgres-side metadata) cheaper.
+
+**Why this differs from the earlier plan.** The earlier writeup framed Chroma as "v0 default, pgvector v1" because pgvector was assumed to add operational weight. In practice it didn't — Postgres was being run anyway. The choice flips when the marginal-cost calculus changes; here it did.
+
+**Architecture preserved.** LlamaIndex's `VectorStoreIndex` abstraction sits between us and the backend, so swapping is a config change. v0 only wires up pgvector (`vector/store.py` calls `PGVectorStore.from_params` directly). Adding a Chroma path later is a `TODO(v1)` extension point: introduce a `VectorBackend` enum and branch in `VectorStore.connect()` the same way `embeddings.make_embed_model` branches on `EmbedProvider`. We did not introduce that abstraction speculatively; today there is one backend and the config object reflects that.
+
+**Tradeoff.** v0 cannot run purely-local without Docker (you need a Postgres). Acceptable because the rest of the stack (Neo4j) already requires Docker. If a "no-docker dev mode" becomes a concrete need, the Chroma backend is the natural answer; that's when we land the abstraction.
+
+**Deferred (v1).** Chroma backend behind the `VectorBackend` discriminator, for purely-local dev/demo use cases.
+
+---
+
 ## Deployment
 
 **Question.** How is the system run?
 
-**Decision (v0).** MCP server runs natively (stdio transport), spawned by the agent. Neo4j runs in `docker-compose`. Vector store is local Chroma persistence.
+**Decision (v0).** MCP server runs natively (stdio transport), spawned by the agent. Both Neo4j and Postgres (with pgvector) run in `docker-compose`. The vector store is pgvector — see "Vector Store Backend" below.
 
 **Why not Docker for the MCP server.** Stdio MCP servers are launched as subprocesses by the agent; containerizing them adds cold-start cost without much gain at this stage.
 

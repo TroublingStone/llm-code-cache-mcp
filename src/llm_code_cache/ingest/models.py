@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
-from llm_code_cache.ingest.enums.node_kind import NodeKind
-from llm_code_cache.ingest.enums.edge_kind import EdgeKind
+from llm_code_cache.ingest.enums import EdgeKind, NodeKind
+
 
 @dataclass
 class Node:
@@ -42,7 +42,7 @@ class Metadata:
     # and the chunk is stale — trigger reindex.
 
     @classmethod
-    def from_node(cls, node: Node, repo: str) -> "Metadata":
+    def from_node(cls, node: Node, repo: str) -> Metadata:
         return cls(
             repo=repo,
             path=node.path,
