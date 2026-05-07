@@ -83,16 +83,16 @@ class GraphStore:
 
     def _upsert_nodes_for_label(self, session, label, nodes):
         query = queries.upsert_nodes_query(label)
-        for ind in range(0, len(nodes), _BATCH_SIZE):
-            batch = nodes[ind : ind + _BATCH_SIZE]
+        for i in range(0, len(nodes), _BATCH_SIZE):
+            batch = nodes[i : i + _BATCH_SIZE]
             payload = [self._node_to_dict(n) for n in batch]
             session.execute_write(lambda tx, p=payload: tx.run(query, nodes=p))
 
     def _node_to_dict(self, node: Node) -> dict:
-        node_d = asdict(node)
-        qn = node_d.pop(NodeProperty.QUALIFIED_NAME)
-        node_d.pop(NodeField.KIND)
-        return {NodeProperty.QUALIFIED_NAME: qn, NodeField.PROPS: node_d}
+        props = asdict(node)
+        qn = props.pop(NodeProperty.QUALIFIED_NAME)
+        props.pop(NodeField.KIND)
+        return {NodeProperty.QUALIFIED_NAME: qn, NodeField.PROPS: props}
 
     def _write_edges(self, edges: list[Edge]) -> None:
         by_kind: dict[str, list[Edge]] = defaultdict(list)
@@ -105,8 +105,8 @@ class GraphStore:
 
     def _upsert_edges_for_kind(self, session, rel_type: str, edges: list[Edge]) -> None:
         query = queries.upsert_edges_query(rel_type)
-        for ind in range(0, len(edges), _BATCH_SIZE):
-            batch = edges[ind : ind + _BATCH_SIZE]
+        for i in range(0, len(edges), _BATCH_SIZE):
+            batch = edges[i : i + _BATCH_SIZE]
             payload = [{EdgeField.SOURCE: edge.source, EdgeField.TARGET: edge.target} for edge in batch]
             session.execute_write(lambda tx, p=payload: tx.run(query, edges=p))
 
@@ -132,8 +132,7 @@ class GraphStore:
             end_line=node[NodeProperty.END_LINE],
             source=node[NodeProperty.SOURCE],
         )
-    
-    
+
     def neighbors(
         self,
         qualified_name: str,
