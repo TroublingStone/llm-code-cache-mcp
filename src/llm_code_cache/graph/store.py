@@ -5,13 +5,13 @@ from dataclasses import asdict
 from neo4j import Driver, GraphDatabase, Record
 
 from llm_code_cache.graph import queries
-from llm_code_cache.graph.enums import TraversalDirection
+from llm_code_cache.graph.enums import EdgeField, NodeField, NodeProperty, TraversalDirection
 from llm_code_cache.graph.models import GraphConfig, GraphDefinitionRecord, GraphNeighborRecord
 from llm_code_cache.ingest import Edge, EdgeKind, Node, NodeKind, ParseResult
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 1000
+_BATCH_SIZE = 1000
 _MAX_DEPTH = 10
 _DIRECTION_ARROWS: dict[TraversalDirection, tuple[str, str]] = {
     TraversalDirection.OUTGOING: ("-", "->"),
@@ -83,21 +83,21 @@ class GraphStore:
 
     def _upsert_nodes_for_label(self, session, label, nodes):
         query = queries.upsert_nodes_query(label)
-        for i in range(0, len(nodes), BATCH_SIZE):
-            batch = nodes[i : i + BATCH_SIZE]
+        for ind in range(0, len(nodes), _BATCH_SIZE):
+            batch = nodes[ind : ind + _BATCH_SIZE]
             payload = [self._node_to_dict(n) for n in batch]
             session.execute_write(lambda tx, p=payload: tx.run(query, nodes=p))
 
     def _node_to_dict(self, node: Node) -> dict:
-        d = asdict(node)
-        qn = d.pop("qualified_name")
-        d.pop("kind")
-        return {"qualified_name": qn, "props": d}
+        node_d = asdict(node)
+        qn = node_d.pop(NodeProperty.QUALIFIED_NAME)
+        node_d.pop(NodeField.KIND)
+        return {NodeProperty.QUALIFIED_NAME: qn, NodeField.PROPS: node_d}
 
     def _write_edges(self, edges: list[Edge]) -> None:
         by_kind: dict[str, list[Edge]] = defaultdict(list)
-        for e in edges:
-            by_kind[e.kind.upper()].append(e)
+        for edge in edges:
+            by_kind[edge.kind.upper()].append(edge)
 
         with self.driver.session(database=self._config.database) as session:
             for rel_type, kind_edges in by_kind.items():
@@ -105,9 +105,9 @@ class GraphStore:
 
     def _upsert_edges_for_kind(self, session, rel_type: str, edges: list[Edge]) -> None:
         query = queries.upsert_edges_query(rel_type)
-        for i in range(0, len(edges), BATCH_SIZE):
-            batch = edges[i : i + BATCH_SIZE]
-            payload = [{"source": e.source, "target": e.target} for e in batch]
+        for ind in range(0, len(edges), _BATCH_SIZE):
+            batch = edges[ind : ind + _BATCH_SIZE]
+            payload = [{EdgeField.SOURCE: edge.source, EdgeField.TARGET: edge.target} for edge in batch]
             session.execute_write(lambda tx, p=payload: tx.run(query, edges=p))
 
     def get_definition(self, qualified_name: str) -> GraphDefinitionRecord | None:
@@ -118,19 +118,19 @@ class GraphStore:
         return self._to_definition_record(record)
 
     def _to_definition_record(self, record: Record) -> GraphDefinitionRecord:
-        n = record["n"]
-        f = record["f"]
+        node = record["n"]
+        file = record["f"]
         return GraphDefinitionRecord(
-            qualified_name=n["qualified_name"],
-            name=n["name"],
+            qualified_name=node[NodeProperty.QUALIFIED_NAME],
+            name=node[NodeProperty.NAME],
             kind=NodeKind(record["labels"][0].lower()),
-            docstring=n.get("docstring"),
-            parent_class=n.get("parent_class"),
-            decorators=n.get("decorators", []),
-            file_path=(f or n)["path"],
-            start_line=n["start_line"],
-            end_line=n["end_line"],
-            source=n["source"],
+            docstring=node.get(NodeProperty.DOCSTRING),
+            parent_class=node.get(NodeProperty.PARENT_CLASS),
+            decorators=node.get(NodeProperty.DECORATORS, []),
+            file_path=(file or node)[NodeProperty.PATH],
+            start_line=node[NodeProperty.START_LINE],
+            end_line=node[NodeProperty.END_LINE],
+            source=node[NodeProperty.SOURCE],
         )
     
     
@@ -166,20 +166,20 @@ class GraphStore:
         return [self._to_neighbor_record(r, direction) for r in records]
 
     def _to_neighbor_record(self, record, direction: TraversalDirection) -> GraphNeighborRecord:
-        n = record["neighbor"]
-        f = record["f"]
+        node = record["neighbor"]
+        file = record["f"]
         labels = record["labels"]
 
         if "Unresolved" in labels:
-            text_ref: str | None = n["text_ref"]
+            text_ref: str | None = node[NodeProperty.TEXT_REF]
             qualified_name: str | None = None
             kind: NodeKind | None = None
             name = text_ref.rsplit(".", 1)[-1]
         else:
-            qualified_name = n["qualified_name"]
+            qualified_name = node[NodeProperty.QUALIFIED_NAME]
             text_ref = None
             kind = NodeKind(labels[0].lower())
-            name = n.get("name") or qualified_name.rsplit(".", 1)[-1]
+            name = node.get(NodeProperty.NAME) or qualified_name.rsplit(".", 1)[-1]
         return GraphNeighborRecord(
             qualified_name=qualified_name,
             text_ref=text_ref,
@@ -187,7 +187,7 @@ class GraphStore:
             kind=kind,
             edge_kind=EdgeKind(record["edge_type"].lower()),
             direction=direction,
-            file_path=f["path"] if f is not None else n.get("path", ""),
-            start_line=n.get("start_line", 0),
-            end_line=n.get("end_line", 0),
+            file_path=file[NodeProperty.PATH] if file is not None else node.get(NodeProperty.PATH, ""),
+            start_line=node.get(NodeProperty.START_LINE, 0),
+            end_line=node.get(NodeProperty.END_LINE, 0),
         )
